@@ -28,6 +28,14 @@
           "エクスプローラーがサイドバーの主領域になっている",
           Boolean(appDocument.querySelector(".sidebar > .project-nav")),
         ],
+        [
+          "フォルダー名を Enter キーで保存できる",
+          appDocument.querySelectorAll("#folderForm button[type='submit']").length === 1 &&
+            appDocument.querySelector("#folderForm button[type='submit']")?.id === "saveFolder" &&
+            [...appDocument.querySelectorAll("#folderForm button[value='cancel']")].every(
+              (button) => button.type === "button",
+            ),
+        ],
       ];
       const failures = checks.filter(([, passed]) => !passed).map(([name]) => name);
       document.querySelector("#result").textContent = failures.length

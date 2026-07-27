@@ -1842,11 +1842,10 @@ elements.projectSearch.addEventListener("keydown", (event) => {
 
 $("#folderForm").addEventListener("submit", (event) => {
   event.preventDefault();
-  if (event.submitter?.value === "cancel") {
-    elements.folderDialog.close();
-    return;
-  }
   saveFolderFromDialog();
+});
+$("#folderForm").querySelectorAll(".close-button, .secondary-button").forEach((button) => {
+  button.addEventListener("click", () => elements.folderDialog.close());
 });
 elements.folderName.addEventListener("input", () => {
   $("#folderNameError").textContent = "";
