@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<iframe hidden></iframe>
+<script>
+  const tests = [
+    "project-match.test.html",
+    "folder-order.test.html",
+    "playlist-order.test.html",
+    "task-order.test.html",
+    "app-smoke.test.html",
+    "workspace-selection.test.html",
+    "playlist-drag.test.html",
+    "task-drag.test.html",
+  ];
+  const results = [];
+  const frame = document.querySelector("iframe");
+
+  function runNext() {
+    const test = tests[results.length];
+    if (!test) {
+      const failures = results.filter((result) => !result.passed);
+      document.querySelector("#result").textContent = failures.length
+        ? `FAIL ${failures.map((result) => `${result.test}: ${result.detail}`).join("\n")}`
+        : `PASS ${results.length}/${results.length}`;
+      document.title = failures.length ? "FAIL" : "PASS";
+      return;
+    }
+
+    const startedAt = Date.now();
+    frame.onload = () => {
+      const poll = setInterval(() => {
+        const title = frame.contentDocument.title;
+        const finished = title === "PASS" || title === "FAIL";
+        const timedOut = Date.now() - startedAt > 6000;
+        if (!finished && !timedOut) return;
+        clearInterval(poll);
+        results.push({
+          test,
+          passed: title === "PASS",
+          detail: frame.contentDocument.querySelector("#result")?.textContent || title,
+        });
+        runNext();
+      }, 25);
+    };
+    frame.src = `${test}?suite=${Date.now()}`;
+  }
+
+  runNext();
+</script>

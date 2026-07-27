@@ -3,6 +3,42 @@
 
   const DEFAULT_THRESHOLD = 0.78;
   const DEFAULT_MARGIN = 0.05;
+  const KANA_ROMAJI = {
+    きゃ: "kya", きゅ: "kyu", きょ: "kyo",
+    しゃ: "sha", しゅ: "shu", しょ: "sho",
+    ちゃ: "cha", ちゅ: "chu", ちょ: "cho",
+    にゃ: "nya", にゅ: "nyu", にょ: "nyo",
+    ひゃ: "hya", ひゅ: "hyu", ひょ: "hyo",
+    みゃ: "mya", みゅ: "myu", みょ: "myo",
+    りゃ: "rya", りゅ: "ryu", りょ: "ryo",
+    ぎゃ: "gya", ぎゅ: "gyu", ぎょ: "gyo",
+    じゃ: "ja", じゅ: "ju", じょ: "jo",
+    びゃ: "bya", びゅ: "byu", びょ: "byo",
+    ぴゃ: "pya", ぴゅ: "pyu", ぴょ: "pyo",
+    ふぁ: "fa", ふぃ: "fi", ふぇ: "fe", ふぉ: "fo",
+    うぃ: "wi", うぇ: "we", うぉ: "wo",
+    てぃ: "ti", でぃ: "di", とぅ: "tu", どぅ: "du",
+    しぇ: "she", じぇ: "je", ちぇ: "che",
+    くぁ: "kwa", くぃ: "kwi", くぇ: "kwe", くぉ: "kwo",
+    ぐぁ: "gwa", ぐぃ: "gwi", ぐぇ: "gwe", ぐぉ: "gwo",
+    ゔぁ: "va", ゔぃ: "vi", ゔぇ: "ve", ゔぉ: "vo",
+    あ: "a", い: "i", う: "u", え: "e", お: "o",
+    か: "ka", き: "ki", く: "ku", け: "ke", こ: "ko",
+    さ: "sa", し: "shi", す: "su", せ: "se", そ: "so",
+    た: "ta", ち: "chi", つ: "tsu", て: "te", と: "to",
+    な: "na", に: "ni", ぬ: "nu", ね: "ne", の: "no",
+    は: "ha", ひ: "hi", ふ: "fu", へ: "he", ほ: "ho",
+    ま: "ma", み: "mi", む: "mu", め: "me", も: "mo",
+    や: "ya", ゆ: "yu", よ: "yo",
+    ら: "ra", り: "ri", る: "ru", れ: "re", ろ: "ro",
+    わ: "wa", を: "o", ん: "n",
+    が: "ga", ぎ: "gi", ぐ: "gu", げ: "ge", ご: "go",
+    ざ: "za", じ: "ji", ず: "zu", ぜ: "ze", ぞ: "zo",
+    だ: "da", ぢ: "ji", づ: "zu", で: "de", ど: "do",
+    ば: "ba", び: "bi", ぶ: "bu", べ: "be", ぼ: "bo",
+    ぱ: "pa", ぴ: "pi", ぷ: "pu", ぺ: "pe", ぽ: "po",
+    ゔ: "vu",
+  };
 
   function normalizeForProjectMatch(value = "") {
     return String(value)
@@ -17,6 +53,59 @@
       .replace(/[‐‑‒–—―ーｰ]/g, "-")
       .replace(/\b(?:the|a|an|gameplay|playthrough|playlist|live|stream)\b/gu, " ")
       .replace(/[^\p{L}\p{N}]+/gu, "");
+  }
+
+  function romanizeKana(value = "") {
+    const source = String(value)
+      .normalize("NFKC")
+      .toLocaleLowerCase("ja")
+      .replace(/[\u30a1-\u30f6]/g, (char) =>
+        String.fromCharCode(char.charCodeAt(0) - 0x60),
+      );
+    let result = "";
+    let geminate = false;
+
+    for (let index = 0; index < source.length; index += 1) {
+      const character = source[index];
+      if (character === "っ") {
+        geminate = true;
+        continue;
+      }
+      if (character === "ー") continue;
+
+      const pair = source.slice(index, index + 2);
+      let romaji = KANA_ROMAJI[pair];
+      if (romaji) index += 1;
+      else romaji = KANA_ROMAJI[character] || character;
+
+      if (geminate && /^[a-z]/u.test(romaji)) romaji = romaji[0] + romaji;
+      geminate = false;
+      result += romaji;
+    }
+    return result;
+  }
+
+  // 外来語では挿入母音や L/R、Q/K などの差が大きいため、子音を中心に発音を比較する。
+  // 通常の表記一致より誤判定しやすいので、異なる文字体系間だけ補助的に利用する。
+  function phoneticKey(value = "") {
+    return romanizeKana(value)
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .replace(/(?:ゲーム)?実況(?:プレイ)?|プレイ動画|配信|初見/gu, " ")
+      .replace(/\b(?:the|a|an|gameplay|playthrough|playlist|live|stream)\b/gu, " ")
+      .replace(/ph/gu, "f")
+      .replace(/qu/gu, "k")
+      .replace(/ck/gu, "k")
+      .replace(/x/gu, "ks")
+      .replace(/[qclv]/gu, (character) => ({ q: "k", c: "k", l: "r", v: "b" })[character])
+      .replace(/[aeiouy]/gu, "")
+      .replace(/[^a-z0-9]+/gu, "");
+  }
+
+  function usesDifferentWritingSystems(left, right) {
+    const hasKana = (value) => /[\u3040-\u30ff]/u.test(String(value));
+    const hasLatin = (value) => /[a-z]/iu.test(String(value));
+    return (hasKana(left) && hasLatin(right)) || (hasLatin(left) && hasKana(right));
   }
 
   function tokenizeForInstallmentCheck(value = "") {
@@ -89,10 +178,69 @@
       }))
       .filter((item) => item.number !== null && item.stem.length >= 3);
 
-    return leftInstallments.some((leftItem) =>
+    const sameScriptConflict = leftInstallments.some((leftItem) =>
       rightInstallments.some(
         (rightItem) =>
           leftItem.stem === rightItem.stem && leftItem.number !== rightItem.number,
+      ),
+    );
+    if (sameScriptConflict || !usesDifferentWritingSystems(left, right)) {
+      return sameScriptConflict;
+    }
+
+    const crossScriptInstallments = (value) => {
+      const tokens = String(value)
+        .replace(/([\u2160-\u2188])/gu, " $1 ")
+        .normalize("NFKC")
+        .toLocaleLowerCase("ja")
+        .replace(/#\s*\d+/gu, " ")
+        .replace(/(?:ゲーム)?実況(?:プレイ)?|プレイ動画|配信|初見/gu, " ")
+        .replace(/([\p{L}])(\p{N})/gu, "$1 $2")
+        .replace(/(\p{N})([\p{L}])/gu, "$1 $2")
+        .match(/[\p{L}\p{N}]+/gu) || [];
+      return {
+        tokens,
+        installments: tokens
+          .map((token, index) => ({
+            number: parseInstallmentNumber(token),
+            stem: tokens.slice(0, index).join(" "),
+          }))
+          .filter((item) => item.number !== null && phoneticKey(item.stem).length >= 5),
+      };
+    };
+    const leftCross = crossScriptInstallments(left);
+    const rightCross = crossScriptInstallments(right);
+    const stemMatchesAcrossScripts = (leftStem, rightStem) => {
+      const leftKey = phoneticKey(leftStem);
+      const rightKey = phoneticKey(rightStem);
+      if (leftKey.length < 5 || rightKey.length < 5) return false;
+      return (
+        Math.max(
+          bestWindowSimilarity(leftKey, rightKey),
+          bestWindowSimilarity(rightKey, leftKey),
+        ) >= 0.9
+      );
+    };
+    const leftWhole = leftCross.tokens.join(" ");
+    const rightWhole = rightCross.tokens.join(" ");
+
+    if (
+      !leftCross.installments.length &&
+      rightCross.installments.some((item) => stemMatchesAcrossScripts(leftWhole, item.stem))
+    ) {
+      return true;
+    }
+    if (
+      !rightCross.installments.length &&
+      leftCross.installments.some((item) => stemMatchesAcrossScripts(item.stem, rightWhole))
+    ) {
+      return true;
+    }
+    return leftCross.installments.some((leftItem) =>
+      rightCross.installments.some(
+        (rightItem) =>
+          leftItem.number !== rightItem.number &&
+          stemMatchesAcrossScripts(leftItem.stem, rightItem.stem),
       ),
     );
   }
@@ -207,12 +355,45 @@
 
     const editScore = bestWindowSimilarity(normalizedTerm, normalizedTitle) * 0.94;
     const fzfScore = subsequenceScore(normalizedTerm, normalizedTitle) * 0.9;
+    let phoneticScore = 0;
+    if (usesDifferentWritingSystems(title, term)) {
+      const titlePhonetic = phoneticKey(title);
+      const termPhonetic = phoneticKey(term);
+      if (titlePhonetic.length >= 5 && termPhonetic.length >= 5) {
+        phoneticScore =
+          Math.max(
+            bestWindowSimilarity(termPhonetic, titlePhonetic),
+            bestWindowSimilarity(titlePhonetic, termPhonetic),
+          ) * 0.98;
+      }
+    }
     return {
-      score: Math.max(editScore, fzfScore),
+      score: Math.max(editScore, fzfScore, phoneticScore),
       exact: false,
       normalizedTerm,
       threshold: thresholdForLength(termLength, baseThreshold),
     };
+  }
+
+  function matchesProjectSearch(query, values) {
+    const searchTerm = String(query || "").trim();
+    if (!searchTerm) return true;
+    const candidates = (Array.isArray(values) ? values : [values])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+    const normalizedQuery = normalizeForProjectMatch(searchTerm);
+    if (
+      normalizedQuery &&
+      candidates.some((value) =>
+        normalizeForProjectMatch(value).includes(normalizedQuery),
+      )
+    ) {
+      return true;
+    }
+    return candidates.some((value) => {
+      const match = scoreTerm(value, searchTerm, DEFAULT_THRESHOLD);
+      return match && match.score >= match.threshold;
+    });
   }
 
   function classifyProject(
@@ -299,6 +480,8 @@
     levenshteinDistance,
     similarity,
     subsequenceScore,
+    phoneticKey,
+    matchesProjectSearch,
     classifyProject,
     rememberLearnedAlias,
   };

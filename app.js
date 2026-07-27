@@ -6,9 +6,16 @@ const HANDLE_KEY = "save-file";
 const API_BASE = "https://www.googleapis.com/youtube/v3";
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 480;
-const { parseEpisodeOrder, sortPlaylistTasks } = window.PlaylogEpisodeSort;
+const {
+  parseEpisodeOrder,
+  sortPlaylistTasks,
+  normalizeTaskOrder,
+  sortTasksBySavedOrder,
+  reorderVisibleTaskOrder,
+} = window.PlaylogEpisodeSort;
 const {
   normalizeForProjectMatch,
+  matchesProjectSearch,
   classifyProject,
   rememberLearnedAlias,
 } = window.CuratProjectMatch;
@@ -75,6 +82,9 @@ let activeDropProject = null;
 let activeDropPlaylistRow = null;
 let activePlaylistDropPlacement = "";
 let suppressPlaylistClickUntil = 0;
+let draggedTaskId = null;
+let activeDropTaskRow = null;
+let activeTaskDropPlacement = "";
 let detailReturnFocus = null;
 let editingFolderOriginalName = null;
 let selectedTreeKey = "";
@@ -108,19 +118,27 @@ function loadData() {
 }
 
 function migrateData(saved) {
-  const migratedSeries = saved.series.map((series) => ({
-    createdAt: new Date().toISOString(),
-    lastSyncedAt: null,
-    ...series,
-    project: series.project || series.title || "名称未設定",
-    tasks: sortPlaylistTasks(
+  const migratedSeries = saved.series.map((series) => {
+    const tasks = sortPlaylistTasks(
       (Array.isArray(series.tasks) ? series.tasks : []).map((task) => ({
         ...task,
         sourcePosition: task.sourcePosition ?? task.position ?? 0,
         episodeOrder: parseEpisodeOrder(task.title),
       })),
-    ),
-  }));
+    );
+    const taskOrder = Array.isArray(series.taskOrder)
+      ? normalizeTaskOrder(tasks, series.taskOrder)
+      : undefined;
+    if (taskOrder) sortTasksBySavedOrder(tasks, taskOrder);
+    return {
+      createdAt: new Date().toISOString(),
+      lastSyncedAt: null,
+      ...series,
+      project: series.project || series.title || "名称未設定",
+      tasks,
+      taskOrder,
+    };
+  });
   const savedProjects = Array.isArray(saved.projects) ? saved.projects : [];
   const projectNames = new Set(savedProjects.map((project) => project.name));
   const derivedProjects = [];
@@ -163,6 +181,14 @@ function saveConfig() {
 
 function saveData({ syncFile = true } = {}) {
   data.playlistOrder = normalizePlaylistOrder(data.series, data.playlistOrder);
+  for (const series of data.series) {
+    if (Array.isArray(series.taskOrder)) {
+      series.taskOrder = normalizeTaskOrder(series.tasks, series.taskOrder);
+      sortTasksBySavedOrder(series.tasks, series.taskOrder);
+    } else {
+      sortPlaylistTasks(series.tasks);
+    }
+  }
   data.updatedAt = new Date().toISOString();
   localStorage.setItem(DATA_KEY, JSON.stringify(data));
   if (syncFile && saveFileHandle) {
@@ -346,16 +372,17 @@ function renderProjectTree() {
     return;
   }
 
-  const query = normalizeText(elements.projectSearch.value.trim());
+  const rawQuery = elements.projectSearch.value.trim();
+  const query = normalizeText(rawQuery);
   const visibleGroups = [...groups.entries()]
     .sort(([a], [b]) => compareFolderNames(a, b))
     .filter(([project, seriesList]) => {
       const aliases = projectMatchTerms(project);
       return (
         !query ||
-        normalizeText(`${project} ${aliases.join(" ")}`).includes(query) ||
+        matchesProjectSearch(rawQuery, [project, ...aliases]) ||
         seriesList.some((series) =>
-          normalizeText(`${series.title} ${series.channelTitle || ""}`).includes(query),
+          matchesProjectSearch(rawQuery, [series.title, series.channelTitle || ""]),
         )
       );
     });
@@ -375,9 +402,12 @@ function renderProjectTree() {
       const matchedSeries = query
         ? seriesList.filter(
             (series) =>
-              normalizeText(`${project} ${matchTerms.join(" ")} ${series.title} ${series.channelTitle || ""}`).includes(
-                query,
-              ),
+              matchesProjectSearch(rawQuery, [
+                project,
+                ...matchTerms,
+                series.title,
+                series.channelTitle || "",
+              ]),
           )
         : seriesList;
       const expanded = Boolean(query) || config.expandedProjects[project] !== false;
@@ -560,6 +590,10 @@ function mergePlaylistResult(playlistId, result) {
     freshTasks.push({ ...oldTask, archived: true });
   }
   sortPlaylistTasks(freshTasks);
+  const taskOrder = Array.isArray(existing?.taskOrder)
+    ? normalizeTaskOrder(freshTasks, existing.taskOrder)
+    : undefined;
+  if (taskOrder) sortTasksBySavedOrder(freshTasks, taskOrder);
 
   const snippet = result.playlist.snippet || {};
   const placement = existing
@@ -580,6 +614,7 @@ function mergePlaylistResult(playlistId, result) {
     privacyStatus: result.playlist.status?.privacyStatus || "unknown",
     remoteItemCount: result.playlist.contentDetails?.itemCount ?? freshTasks.length,
     tasks: freshTasks,
+    taskOrder,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     lastSyncedAt: now,
@@ -1333,6 +1368,14 @@ function taskRowHtml(task, index) {
   const videoUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(task.videoId)}`;
   return `
     <li class="task-row is-${escapeHtml(task.status)}" data-task-id="${escapeHtml(task.id)}"${task.status === "doing" ? ' aria-current="true"' : ""}>
+      <button
+        class="task-drag-handle"
+        type="button"
+        draggable="true"
+        data-drag-task="${escapeHtml(task.id)}"
+        aria-label="「${escapeHtml(task.title)}」の順番を変更。ドラッグ、または上下矢印キーで移動"
+        title="ドラッグして並べ替え"
+      >${icon("grip")}</button>
       <button class="task-check" type="button" data-detail-action="toggle" aria-label="${task.status === "done" ? "未視聴に戻す" : "視聴済みにする"}">
         ${task.status === "done" ? icon("check") : ""}
       </button>
@@ -1349,6 +1392,102 @@ function taskRowHtml(task, index) {
       )}<span>${labels[task.status] || "未視聴"}</span></button>
     </li>
   `;
+}
+
+function reorderTaskInSeries(series, taskId, targetId, placement) {
+  const normalizedOrder = normalizeTaskOrder(series.tasks, series.taskOrder);
+  const activeTaskIds = new Set(
+    series.tasks.filter((task) => !task.archived).map((task) => task.id),
+  );
+  const activeIds = normalizedOrder.filter((id) => activeTaskIds.has(id));
+  const nextOrder = reorderVisibleTaskOrder(
+    normalizedOrder,
+    activeIds,
+    taskId,
+    targetId,
+    placement,
+  );
+  if (nextOrder.every((id, index) => id === normalizedOrder[index])) return false;
+
+  series.taskOrder = nextOrder;
+  sortTasksBySavedOrder(series.tasks, series.taskOrder);
+  series.updatedAt = new Date().toISOString();
+  saveData();
+  render();
+  return true;
+}
+
+function clearTaskDragState() {
+  draggedTaskId = null;
+  activeDropTaskRow = null;
+  activeTaskDropPlacement = "";
+  document.body.classList.remove("is-dragging-task");
+  $$(".task-row.is-task-dragging", elements.detailContent).forEach((row) =>
+    row.classList.remove("is-task-dragging"),
+  );
+  $$(".task-row.is-task-drop-before, .task-row.is-task-drop-after", elements.detailContent).forEach(
+    (row) => row.classList.remove("is-task-drop-before", "is-task-drop-after"),
+  );
+}
+
+function setActiveDropTask(row, placement = "") {
+  if (activeDropTaskRow === row && activeTaskDropPlacement === placement) return;
+  activeDropTaskRow?.classList.remove("is-task-drop-before", "is-task-drop-after");
+  activeDropTaskRow = row;
+  activeTaskDropPlacement = placement;
+  activeDropTaskRow?.classList.add(
+    placement === "after" ? "is-task-drop-after" : "is-task-drop-before",
+  );
+}
+
+function handleTaskDragStart(event) {
+  const handle = event.target.closest("[data-drag-task]");
+  const series = data.series.find((item) => item.id === detailSeriesId);
+  if (!handle || !series?.tasks.some((task) => task.id === handle.dataset.dragTask)) return;
+
+  draggedTaskId = handle.dataset.dragTask;
+  handle.closest(".task-row")?.classList.add("is-task-dragging");
+  document.body.classList.add("is-dragging-task");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", draggedTaskId);
+  event.dataTransfer.setData("application/x-curat-task", draggedTaskId);
+}
+
+function handleTaskDragOver(event) {
+  if (!draggedTaskId) return;
+  const row = event.target.closest(".task-row");
+  if (!row || row.dataset.taskId === draggedTaskId) {
+    setActiveDropTask(null);
+    return;
+  }
+
+  const rect = row.getBoundingClientRect();
+  const placement = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  setActiveDropTask(row, placement);
+}
+
+function handleTaskDrop(event) {
+  if (!draggedTaskId) return;
+  const row = event.target.closest(".task-row");
+  const series = data.series.find((item) => item.id === detailSeriesId);
+  if (!row || !series || row.dataset.taskId === draggedTaskId) {
+    clearTaskDragState();
+    return;
+  }
+
+  event.preventDefault();
+  const taskId =
+    event.dataTransfer.getData("application/x-curat-task") ||
+    event.dataTransfer.getData("text/plain") ||
+    draggedTaskId;
+  const targetId = row.dataset.taskId;
+  const placement = activeTaskDropPlacement || "before";
+  clearTaskDragState();
+  if (reorderTaskInSeries(series, taskId, targetId, placement)) {
+    showToast("エピソードの並び順を保存しました");
+  }
 }
 
 function updateTask(seriesId, taskId, nextStatus) {
@@ -1678,6 +1817,34 @@ elements.detailContent.addEventListener("click", async (event) => {
   }
 });
 
+elements.detailContent.addEventListener("dragstart", handleTaskDragStart);
+elements.detailContent.addEventListener("dragover", handleTaskDragOver);
+elements.detailContent.addEventListener("drop", handleTaskDrop);
+elements.detailContent.addEventListener("dragleave", (event) => {
+  if (!elements.detailContent.contains(event.relatedTarget)) setActiveDropTask(null);
+});
+elements.detailContent.addEventListener("keydown", (event) => {
+  const handle = event.target.closest("[data-drag-task]");
+  if (!handle || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  const series = data.series.find((item) => item.id === detailSeriesId);
+  if (!series) return;
+  const activeTasks = series.tasks.filter((task) => !task.archived);
+  const index = activeTasks.findIndex((task) => task.id === handle.dataset.dragTask);
+  const offset = event.key === "ArrowUp" ? -1 : 1;
+  const target = activeTasks[index + offset];
+  if (!target) return;
+
+  event.preventDefault();
+  const taskId = handle.dataset.dragTask;
+  const placement = offset < 0 ? "before" : "after";
+  if (!reorderTaskInSeries(series, taskId, target.id, placement)) return;
+  requestAnimationFrame(() => {
+    $$("[data-drag-task]", elements.detailContent)
+      .find((item) => item.dataset.dragTask === taskId)
+      ?.focus();
+  });
+});
+
 elements.syncAll.addEventListener("click", syncAllSeries);
 elements.deleteAll.addEventListener("click", deleteAllPlaylistsAndFolders);
 
@@ -1856,6 +2023,7 @@ elements.projectTree.addEventListener("dragleave", (event) => {
 document.addEventListener("dragend", () => {
   suppressPlaylistClickUntil = Date.now() + 250;
   clearPlaylistDragState();
+  clearTaskDragState();
 });
 
 $("#newProject").addEventListener("click", () => openFolderDialog());

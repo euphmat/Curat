@@ -1,0 +1,75 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>task-order tests</title>
+<pre id="result">running</pre>
+<script src="../episode-sort.js"></script>
+<script>
+  const {
+    normalizeTaskOrder,
+    sortTasksBySavedOrder,
+    reorderVisibleTaskOrder,
+  } = window.PlaylogEpisodeSort;
+  const failures = [];
+  let assertions = 0;
+
+  function equal(actual, expected, message) {
+    assertions += 1;
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      failures.push(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+  }
+
+  const tasks = [
+    { id: "a", title: "Part 3", sourcePosition: 0, archived: false },
+    { id: "b", title: "Part 1", sourcePosition: 1, archived: false },
+    { id: "c", title: "Part 2", sourcePosition: 2, archived: false },
+  ];
+
+  equal(
+    normalizeTaskOrder(tasks, []),
+    ["b", "c", "a"],
+    "保存順がない場合は解析したエピソード順を使う",
+  );
+  equal(
+    normalizeTaskOrder(tasks, ["a", "missing", "a", "c"]),
+    ["a", "c", "b"],
+    "保存順の欠損と重複を修復する",
+  );
+  equal(
+    sortTasksBySavedOrder([...tasks], ["c", "a", "b"]).map((task) => task.id),
+    ["c", "a", "b"],
+    "保存した手動順でタスクを返す",
+  );
+  equal(
+    reorderVisibleTaskOrder(["a", "b", "c"], ["a", "b", "c"], "c", "a", "before"),
+    ["c", "a", "b"],
+    "対象エピソードの前へ移動する",
+  );
+  equal(
+    reorderVisibleTaskOrder(["a", "b", "archived"], ["a", "b"], "a", "b", "after"),
+    ["b", "a", "archived"],
+    "非表示のアーカイブ済み動画の位置は維持する",
+  );
+  equal(
+    normalizeTaskOrder(
+      [...tasks, { id: "archived", title: "Part 0", sourcePosition: 3, archived: true }],
+      ["archived", "a", "c"],
+    ),
+    ["a", "c", "b", "archived"],
+    "アーカイブ済み動画は有効な動画より後ろへまとめる",
+  );
+  equal(
+    normalizeTaskOrder(
+      [...tasks, { id: "new", title: "Part 4", sourcePosition: 3, archived: false }],
+      ["c", "a", "b"],
+    ),
+    ["c", "a", "b", "new"],
+    "再同期で追加された動画は既存の手動順を崩さず末尾へ加える",
+  );
+
+  const output = failures.length
+    ? `FAIL ${failures.length}/${assertions}\n${failures.join("\n")}`
+    : `PASS ${assertions}/${assertions}`;
+  document.querySelector("#result").textContent = output;
+  document.title = failures.length ? "FAIL" : "PASS";
+</script>

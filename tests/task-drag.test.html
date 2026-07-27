@@ -1,0 +1,87 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<iframe style="width: 1200px; height: 900px; border: 0"></iframe>
+<script>
+  const DATA_KEY = "playlog:data:v1";
+  const now = "2026-07-27T00:00:00.000Z";
+  const tasks = ["a", "b", "c"].map((id, index) => ({
+    id,
+    videoId: id,
+    title: `Part ${index + 1}`,
+    thumbnail: "",
+    sourcePosition: index,
+    position: index,
+    episodeOrder: null,
+    status: "todo",
+    archived: false,
+    createdAt: now,
+    updatedAt: now,
+  }));
+  localStorage.setItem(DATA_KEY, JSON.stringify({
+    version: 1,
+    updatedAt: now,
+    series: [{
+      id: "playlist",
+      title: "テストプレイリスト",
+      channelTitle: "テストチャンネル",
+      project: "テスト",
+      thumbnail: "",
+      sourceUrl: "https://www.youtube.com/playlist?list=playlist",
+      tasks,
+      taskOrder: ["a", "b", "c"],
+      createdAt: now,
+      updatedAt: now,
+    }],
+    projects: [{ name: "テスト", aliases: [], learnedAliases: [] }],
+    playlistOrder: ["playlist"],
+  }));
+
+  const frame = document.querySelector("iframe");
+  frame.addEventListener("load", () => {
+    setTimeout(() => {
+      const appDocument = frame.contentDocument;
+      const source = appDocument.querySelector('[data-drag-task="c"]');
+      const target = appDocument.querySelector('[data-task-id="a"]');
+      const dataTransfer = new DataTransfer();
+      const targetRect = target.getBoundingClientRect();
+
+      source.dispatchEvent(new DragEvent("dragstart", {
+        bubbles: true,
+        dataTransfer,
+      }));
+      target.dispatchEvent(new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        clientY: targetRect.top + 1,
+        dataTransfer,
+      }));
+      target.dispatchEvent(new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        clientY: targetRect.top + 1,
+        dataTransfer,
+      }));
+
+      setTimeout(() => {
+        const renderedOrder = [
+          ...appDocument.querySelectorAll(".task-row"),
+        ].map((row) => row.dataset.taskId);
+        const saved = JSON.parse(localStorage.getItem(DATA_KEY));
+        const savedSeries = saved.series.find((series) => series.id === "playlist");
+        const passed =
+          JSON.stringify(renderedOrder) === JSON.stringify(["c", "a", "b"]) &&
+          JSON.stringify(savedSeries.taskOrder) === JSON.stringify(["c", "a", "b"]) &&
+          JSON.stringify(savedSeries.tasks.map((task) => task.id)) ===
+            JSON.stringify(["c", "a", "b"]);
+        document.querySelector("#result").textContent = passed
+          ? "PASS task drag order is rendered and persisted"
+          : `FAIL rendered=${JSON.stringify(renderedOrder)} taskOrder=${JSON.stringify(savedSeries.taskOrder)}`;
+        document.title = passed ? "PASS" : "FAIL";
+        localStorage.removeItem(DATA_KEY);
+      }, 100);
+    }, 500);
+  }, { once: true });
+  frame.src = "../index.html#series=playlist";
+</script>

@@ -4401,11 +4401,12 @@ dialog::backdrop {
 
 .task-row,
 body.detail-pinned .task-row {
+  position: relative;
   display: grid;
   grid-template:
-    "thumb copy check" auto
-    "thumb state check" auto
-    / 92px minmax(0, 1fr) 34px;
+    "drag thumb copy check" auto
+    "drag thumb state check" auto
+    / 22px 92px minmax(0, 1fr) 34px;
   align-items: center;
   gap: 5px 12px;
   min-height: 82px;
@@ -4418,6 +4419,64 @@ body.detail-pinned .task-row {
     background 150ms ease,
     border-color 150ms ease,
     transform 150ms ease;
+}
+
+.task-drag-handle {
+  grid-area: drag;
+  align-self: stretch;
+  width: 22px;
+  padding: 0;
+  color: #756d8a;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.task-drag-handle:hover,
+.task-drag-handle:focus-visible {
+  color: var(--detail-accent);
+  background: rgba(139, 111, 198, 0.15);
+  outline: none;
+}
+
+.task-drag-handle:active {
+  cursor: grabbing;
+}
+
+.task-drag-handle .icon {
+  width: 15px;
+  height: 20px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.task-row.is-task-dragging {
+  opacity: 0.38;
+  transform: scale(0.99);
+}
+
+.task-row.is-task-drop-before::before,
+.task-row.is-task-drop-after::after {
+  position: absolute;
+  z-index: 5;
+  right: 8px;
+  left: 8px;
+  height: 3px;
+  content: "";
+  background: var(--detail-accent);
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba(207, 150, 255, 0.82);
+  pointer-events: none;
+}
+
+.task-row.is-task-drop-before::before {
+  top: -6px;
+}
+
+.task-row.is-task-drop-after::after {
+  bottom: -6px;
 }
 
 .task-row:hover {
@@ -5162,9 +5221,9 @@ body.detail-pinned .task-state-button {
 
 .workspace .task-row {
   grid-template:
-    "thumb copy check" auto
-    "thumb state check" auto
-    / 118px minmax(0, 1fr) 36px;
+    "drag thumb copy check" auto
+    "drag thumb state check" auto
+    / 22px 118px minmax(0, 1fr) 36px;
   min-height: 92px;
   padding: 10px 12px;
 }
@@ -5471,9 +5530,9 @@ body.detail-pinned .task-state-button {
 
   .workspace .task-row {
     grid-template:
-      "thumb copy check" auto
-      "thumb state check" auto
-      / 78px minmax(0, 1fr) 30px;
+      "drag thumb copy check" auto
+      "drag thumb state check" auto
+      / 20px 78px minmax(0, 1fr) 30px;
     gap: 5px 8px;
     padding: 8px;
   }

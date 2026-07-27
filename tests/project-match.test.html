@@ -6,6 +6,8 @@
 <script>
   const {
     normalizeForProjectMatch,
+    phoneticKey,
+    matchesProjectSearch,
     classifyProject,
     rememberLearnedAlias,
   } = window.CuratProjectMatch;
@@ -41,6 +43,63 @@
     normalizeForProjectMatch("ポケット モンスター"),
     normalizeForProjectMatch("ぽけっと・もんすたー"),
     "ひらがな・カタカナ・区切りを同一視する",
+  );
+  equal(phoneticKey("ドラゴンクエスト"), "drgnkst", "カナを発音キーに変換する");
+
+  const dragonQuest = classifyProject("Dragon Quest 実況 #1", [
+    { name: "ドラゴンクエスト", aliases: [], learnedAliases: [] },
+  ]);
+  equal(dragonQuest.projectName, "ドラゴンクエスト", "日本語名を英語タイトルと照合する");
+  equal(dragonQuest.matchType, "fuzzy", "日英の発音一致は近似一致として扱う");
+
+  const reverseDragonQuest = classifyProject("ドラゴンクエスト 実況 #1", [
+    { name: "Dragon Quest", aliases: [], learnedAliases: [] },
+  ]);
+  equal(reverseDragonQuest.projectName, "Dragon Quest", "英語名を日本語タイトルと照合する");
+
+  const fireEmblem = classifyProject("Fire Emberem Engage", [
+    { name: "ファイアーエムブレム", aliases: [], learnedAliases: [] },
+  ]);
+  equal(fireEmblem.projectName, "ファイアーエムブレム", "日英表記と誤字を同時に吸収する");
+  equal(fireEmblem.createNew, false, "日英表記の一致では新規フォルダーを作らない");
+
+  const crossScriptSequel = classifyProject("Dragon Quest Ⅱ", [
+    { name: "ドラゴンクエスト", aliases: [], learnedAliases: [] },
+  ]);
+  equal(
+    crossScriptSequel.createNew,
+    true,
+    "日英表記が一致しても番号付きの別作品は既存フォルダーへ含めない",
+  );
+
+  const crossScriptDifferentSequel = classifyProject("Dragon Quest Ⅲ", [
+    { name: "ドラゴンクエストⅡ", aliases: [], learnedAliases: [] },
+  ]);
+  equal(
+    crossScriptDifferentSequel.createNew,
+    true,
+    "日英表記で異なる作品番号を近似一致させない",
+  );
+
+  equal(
+    matchesProjectSearch("Dragon Quest", ["ドラゴンクエスト"]),
+    true,
+    "サイドバー検索でも英語から日本語名を検索する",
+  );
+  equal(
+    matchesProjectSearch("ファイアーエムブレム", ["Fire Emblem"]),
+    true,
+    "サイドバー検索でも日本語から英語名を検索する",
+  );
+  equal(
+    matchesProjectSearch("Dragon Quest", ["ファイナルファンタジー"]),
+    false,
+    "無関係な日英タイトルは一致させない",
+  );
+  equal(
+    matchesProjectSearch("---", ["Dragon Quest"]),
+    false,
+    "記号だけの検索を全件一致にしない",
   );
 
   const exact = classifyProject("【実況】Pokémon Scarlet #1", projects);

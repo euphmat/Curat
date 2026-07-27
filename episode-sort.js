@@ -232,10 +232,74 @@
     return tasks;
   }
 
+  function normalizeTaskOrder(tasks, savedOrder = []) {
+    const tasksById = new Map(tasks.map((task) => [task.id, task]));
+    const seen = new Set();
+    const activeOrder = [];
+    const archivedOrder = [];
+
+    for (const id of Array.isArray(savedOrder) ? savedOrder : []) {
+      const task = tasksById.get(id);
+      if (!task || seen.has(id)) continue;
+      seen.add(id);
+      (task.archived ? archivedOrder : activeOrder).push(id);
+    }
+
+    const missing = tasks
+      .filter((task) => !seen.has(task.id))
+      .sort(comparePlaylistTasks);
+    for (const task of missing) {
+      (task.archived ? archivedOrder : activeOrder).push(task.id);
+    }
+
+    return [...activeOrder, ...archivedOrder];
+  }
+
+  function sortTasksBySavedOrder(tasks, savedOrder = []) {
+    const positions = new Map(
+      normalizeTaskOrder(tasks, savedOrder).map((id, index) => [id, index]),
+    );
+    tasks.sort((a, b) => positions.get(a.id) - positions.get(b.id));
+    tasks.forEach((task, index) => {
+      task.position = index;
+    });
+    return tasks;
+  }
+
+  function reorderVisibleTaskOrder(
+    allOrder,
+    visibleIds,
+    draggedId,
+    targetId,
+    placement,
+  ) {
+    if (
+      draggedId === targetId ||
+      !visibleIds.includes(draggedId) ||
+      !visibleIds.includes(targetId)
+    ) {
+      return [...allOrder];
+    }
+
+    const reorderedVisible = visibleIds.filter((id) => id !== draggedId);
+    const targetIndex = reorderedVisible.indexOf(targetId);
+    const insertIndex = targetIndex + (placement === "after" ? 1 : 0);
+    reorderedVisible.splice(insertIndex, 0, draggedId);
+
+    const visibleSet = new Set(visibleIds);
+    let visibleIndex = 0;
+    return allOrder.map((id) =>
+      visibleSet.has(id) ? reorderedVisible[visibleIndex++] : id,
+    );
+  }
+
   root.PlaylogEpisodeSort = {
     normalizeTitle,
     parseEpisodeOrder,
     comparePlaylistTasks,
     sortPlaylistTasks,
+    normalizeTaskOrder,
+    sortTasksBySavedOrder,
+    reorderVisibleTaskOrder,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);
