@@ -10,6 +10,8 @@
     matchesProjectSearch,
     classifyProject,
     rememberLearnedAlias,
+    rememberProjectAlias,
+    rememberProjectCorrection,
   } = window.CuratProjectMatch;
   const failures = [];
   let assertions = 0;
@@ -180,6 +182,53 @@
   equal(rememberLearnedAlias(learningProject, "実況での表記"), true, "別名を学習する");
   equal(rememberLearnedAlias(learningProject, "実況での表記"), false, "重複学習を防ぐ");
   equal(learningProject.learnedAliases.length, 1, "学習済み別名をDBに保持する");
+
+  equal(
+    rememberProjectAlias(learningProject, "実況での表記"),
+    true,
+    "手動訂正した表記を通常の別名に昇格する",
+  );
+  equal(learningProject.aliases[0], "実況での表記", "昇格した別名を編集可能な別名に保持する");
+  equal(learningProject.learnedAliases.length, 0, "通常の別名と学習済み別名を重複させない");
+  equal(
+    rememberProjectAlias(learningProject, "実況での表記"),
+    false,
+    "通常の別名の重複追加を防ぐ",
+  );
+  equal(rememberProjectAlias(learningProject, "正式名"), false, "正式名自体は別名に追加しない");
+
+  const correctedProjects = [
+    {
+      name: "誤分類フォルダー",
+      aliases: [],
+      learnedAliases: ["Pokémon Legends Z-A 実況"],
+    },
+    {
+      name: "ポケットモンスター",
+      aliases: [],
+      learnedAliases: [],
+    },
+  ];
+  equal(
+    rememberProjectCorrection(
+      correctedProjects,
+      "誤分類フォルダー",
+      "ポケットモンスター",
+      "Pokémon Legends Z-A 実況",
+    ),
+    true,
+    "追加直後の手動移動を移動先の別名として記録する",
+  );
+  equal(
+    correctedProjects[0].learnedAliases.length,
+    0,
+    "訂正した表記を誤分類元の学習済み別名から取り除く",
+  );
+  equal(
+    classifyProject("Pokémon Legends Z-A 実況 #2", correctedProjects).projectName,
+    "ポケットモンスター",
+    "訂正後の類似プレイリストを移動先へ分類する",
+  );
 
   const output = failures.length
     ? `FAIL ${failures.length}/${assertions}\n${failures.join("\n")}`

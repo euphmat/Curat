@@ -475,6 +475,48 @@
     return true;
   }
 
+  function rememberProjectAlias(project, value) {
+    if (!project) return false;
+    const alias = String(value || "").trim().slice(0, 180);
+    const normalized = normalizeForProjectMatch(alias);
+    if (!normalized || normalizeForProjectMatch(project.name) === normalized) return false;
+
+    project.aliases ||= [];
+    project.learnedAliases ||= [];
+    const alreadyVisible = project.aliases.some(
+      (term) => normalizeForProjectMatch(term) === normalized,
+    );
+    project.learnedAliases = project.learnedAliases.filter(
+      (term) => normalizeForProjectMatch(term) !== normalized,
+    );
+    if (alreadyVisible) return false;
+    project.aliases.push(alias);
+    return true;
+  }
+
+  function rememberProjectCorrection(
+    projects,
+    sourceProjectName,
+    targetProjectName,
+    value,
+  ) {
+    if (sourceProjectName === targetProjectName) return false;
+    const projectList = Array.isArray(projects) ? projects : [];
+    const normalized = normalizeForProjectMatch(value);
+    const sourceProject = projectList.find(
+      (project) => project.name === sourceProjectName,
+    );
+    if (sourceProject && normalized) {
+      sourceProject.learnedAliases = (sourceProject.learnedAliases || []).filter(
+        (term) => normalizeForProjectMatch(term) !== normalized,
+      );
+    }
+    const targetProject = projectList.find(
+      (project) => project.name === targetProjectName,
+    );
+    return rememberProjectAlias(targetProject, value);
+  }
+
   root.CuratProjectMatch = {
     normalizeForProjectMatch,
     levenshteinDistance,
@@ -484,5 +526,7 @@
     matchesProjectSearch,
     classifyProject,
     rememberLearnedAlias,
+    rememberProjectAlias,
+    rememberProjectCorrection,
   };
 })(typeof window !== "undefined" ? window : globalThis);

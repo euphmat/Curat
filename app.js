@@ -6,6 +6,7 @@ const HANDLE_KEY = "save-file";
 const API_BASE = "https://www.googleapis.com/youtube/v3";
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 480;
+const RECENT_IMPORT_CORRECTION_MS = 5 * 60 * 1000;
 const {
   parseEpisodeOrder,
   sortPlaylistTasks,
@@ -18,6 +19,7 @@ const {
   matchesProjectSearch,
   classifyProject,
   rememberLearnedAlias,
+  rememberProjectCorrection,
 } = window.CuratProjectMatch;
 const {
   normalizePlaylistOrder,
@@ -91,6 +93,7 @@ let selectedTreeKey = "";
 let contextTarget = null;
 let confirmResolver = null;
 let importHighlightTimer = null;
+let recentImportCorrection = null;
 
 if (config.sidebarCollapsed && window.matchMedia("(min-width: 781px)").matches) {
   document.body.classList.add("sidebar-collapsed");
@@ -249,6 +252,26 @@ function inferProjectPlacement(playlistTitle) {
 
 function learnPlaylistTitle(projectName, playlistTitle) {
   return rememberLearnedAlias(projectRuleByName(projectName), playlistTitle);
+}
+
+function learnRecentImportCorrection(series, targetProjectName) {
+  if (
+    !recentImportCorrection ||
+    recentImportCorrection.seriesId !== series?.id ||
+    Date.now() - recentImportCorrection.importedAt > RECENT_IMPORT_CORRECTION_MS
+  ) {
+    recentImportCorrection = null;
+    return false;
+  }
+
+  const { sourceProject, playlistTitle } = recentImportCorrection;
+  recentImportCorrection = null;
+  return rememberProjectCorrection(
+    data.projects,
+    sourceProject,
+    targetProjectName,
+    playlistTitle,
+  );
 }
 
 function projectMatchTerms(projectName) {
@@ -717,6 +740,14 @@ async function importPlaylist(input, { quiet = false } = {}) {
   if (!quiet) setFormLoading(true, "プレイリストを読み込み中…");
   const result = await fetchPlaylist(playlistId);
   const { series, placement, isNew } = mergePlaylistResult(playlistId, result);
+  if (isNew) {
+    recentImportCorrection = {
+      seriesId: series.id,
+      sourceProject: series.project,
+      playlistTitle: series.title,
+      importedAt: Date.now(),
+    };
+  }
   render();
   openSeries(series.id);
   if (!quiet && isNew) revealImportedPlaylist(series);
@@ -1215,7 +1246,8 @@ function moveSeriesToProject(seriesId, projectName) {
   }
 
   series.project = targetName;
-  learnPlaylistTitle(targetName, series.title);
+  const aliasAdded = learnRecentImportCorrection(series, targetName);
+  if (!aliasAdded) learnPlaylistTitle(targetName, series.title);
   series.updatedAt = new Date().toISOString();
   config.expandedProjects ||= {};
   config.expandedProjects[targetName] = true;
@@ -1223,7 +1255,11 @@ function moveSeriesToProject(seriesId, projectName) {
   selectedTreeKey = `playlist:${series.id}`;
   saveData();
   render();
-  showToast(`「${series.title}」を「${targetName}」へ移動しました`);
+  showToast(
+    aliasAdded
+      ? `「${series.title}」を移動し、今後の分類用の別名にも追加しました`
+      : `「${series.title}」を「${targetName}」へ移動しました`,
+  );
   return true;
 }
 
@@ -2150,7 +2186,9 @@ $("#projectForm").addEventListener("submit", (event) => {
   } else {
     data.projects.push({ name, aliases, learnedAliases: [] });
   }
-  learnPlaylistTitle(name, series.title);
+  const aliasAdded = editingProjectOriginalName !== name &&
+    learnRecentImportCorrection(series, name);
+  if (!aliasAdded) learnPlaylistTitle(name, series.title);
   config.expandedProjects ||= {};
   config.expandedProjects[name] = true;
   selectedTreeKey = `playlist:${series.id}`;
@@ -2158,7 +2196,11 @@ $("#projectForm").addEventListener("submit", (event) => {
   saveData();
   elements.projectDialog.close();
   render();
-  showToast(`「${name}」フォルダーへ移動しました`);
+  showToast(
+    aliasAdded
+      ? `「${name}」へ移動し、今後の分類用の別名にも追加しました`
+      : `「${name}」フォルダーへ移動しました`,
+  );
 });
 $(".close-button", elements.projectDialog).addEventListener("click", () =>
   elements.projectDialog.close(),
