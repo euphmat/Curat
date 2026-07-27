@@ -19,6 +19,84 @@
       .replace(/[^\p{L}\p{N}]+/gu, "");
   }
 
+  function tokenizeForInstallmentCheck(value = "") {
+    const normalized = String(value)
+      .replace(/([\u2160-\u2188])/gu, " $1 ")
+      .normalize("NFKC")
+      .toLocaleLowerCase("ja")
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .replace(/#\s*\d+/gu, " ")
+      .replace(/(?:ゲーム)?実況(?:プレイ)?|プレイ動画|配信|初見/gu, " ")
+      .replace(/[\u30a1-\u30f6]/g, (char) =>
+        String.fromCharCode(char.charCodeAt(0) - 0x60),
+      )
+      .replace(/([\p{L}])(\p{N})/gu, "$1 $2")
+      .replace(/(\p{N})([\p{L}])/gu, "$1 $2")
+      .replace(/\b(?:the|a|an|gameplay|playthrough|playlist|live|stream)\b/gu, " ");
+    return normalized.match(/[\p{L}\p{N}]+/gu) || [];
+  }
+
+  function parseInstallmentNumber(token) {
+    if (/^\d+$/u.test(token)) {
+      const value = Number(token);
+      return Number.isSafeInteger(value) && value > 0 ? value : null;
+    }
+    if (
+      !/^(?=[mdclxvi]+$)m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/u.test(
+        token,
+      )
+    ) {
+      return null;
+    }
+    const values = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 };
+    const numeralValue = [...token].reduce((total, character, index, characters) => {
+      const value = values[character];
+      return total + (value < (values[characters[index + 1]] || 0) ? -value : value);
+    }, 0);
+    return numeralValue <= 100 ? numeralValue : null;
+  }
+
+  function containsTokens(container, contained) {
+    if (!contained.length || contained.length >= container.length) return false;
+    if (parseInstallmentNumber(contained[contained.length - 1]) !== null) return false;
+    for (let start = 0; start <= container.length - contained.length; start += 1) {
+      if (!contained.every((token, index) => token === container[start + index])) continue;
+      if (parseInstallmentNumber(container[start + contained.length]) !== null) return true;
+    }
+    return false;
+  }
+
+  function hasNumberedInstallmentConflict(left, right) {
+    const leftTokens = tokenizeForInstallmentCheck(left);
+    const rightTokens = tokenizeForInstallmentCheck(right);
+    if (containsTokens(leftTokens, rightTokens) || containsTokens(rightTokens, leftTokens)) {
+      return true;
+    }
+
+    const leftInstallments = leftTokens
+      .map((token, index) => ({
+        index,
+        number: parseInstallmentNumber(token),
+        stem: leftTokens.slice(0, index).join(""),
+      }))
+      .filter((item) => item.number !== null && item.stem.length >= 3);
+    const rightInstallments = rightTokens
+      .map((token, index) => ({
+        index,
+        number: parseInstallmentNumber(token),
+        stem: rightTokens.slice(0, index).join(""),
+      }))
+      .filter((item) => item.number !== null && item.stem.length >= 3);
+
+    return leftInstallments.some((leftItem) =>
+      rightInstallments.some(
+        (rightItem) =>
+          leftItem.stem === rightItem.stem && leftItem.number !== rightItem.number,
+      ),
+    );
+  }
+
   function levenshteinDistance(left, right) {
     const a = [...left];
     const b = [...right];
@@ -113,6 +191,7 @@
     const normalizedTerm = normalizeForProjectMatch(term);
     const termLength = [...normalizedTerm].length;
     if (!normalizedTitle || termLength < 2) return null;
+    if (hasNumberedInstallmentConflict(title, term)) return null;
 
     if (normalizedTitle === normalizedTerm) {
       return { score: 1, exact: true, normalizedTerm, threshold: 1 };
@@ -143,6 +222,10 @@
   ) {
     const projectMatches = (Array.isArray(projects) ? projects : [])
       .map((project) => {
+        const identityTerms = [project.name, ...(project.aliases || [])];
+        if (identityTerms.some((term) => hasNumberedInstallmentConflict(playlistTitle, term))) {
+          return null;
+        }
         const terms = [
           { value: project.name, source: "name" },
           ...(project.aliases || []).map((value) => ({ value, source: "alias" })),

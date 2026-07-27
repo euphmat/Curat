@@ -76,6 +76,47 @@
   ]);
   equal(longest.projectName, "Breath of the Wild", "完全一致では最長の候補を優先する");
 
+  const numberedSequel = classifyProject("FINAL FANTASY Ⅱ", [
+    {
+      name: "FINAL FANTASY",
+      aliases: [],
+      learnedAliases: ["FINAL FANTASY Ⅱ"],
+    },
+  ]);
+  equal(numberedSequel.createNew, true, "番号付きの別作品は既存フォルダーへ含めない");
+  equal(numberedSequel.projectName, "FINAL FANTASY Ⅱ", "番号付き作品には新規フォルダーを作る");
+
+  const attachedSequelNumber = classifyProject("FINAL FANTASYⅡ", [
+    { name: "FINAL FANTASY", aliases: [], learnedAliases: [] },
+  ]);
+  equal(attachedSequelNumber.createNew, true, "空白なしの作品番号も別作品として扱う");
+
+  const unnumberedPrequel = classifyProject("FINAL FANTASY", [
+    { name: "FINAL FANTASY Ⅱ", aliases: [], learnedAliases: [] },
+  ]);
+  equal(unnumberedPrequel.createNew, true, "番号なし作品も番号付きフォルダーへ含めない");
+
+  const differentSequel = classifyProject("FINAL FANTASY Ⅲ 実況 #1", [
+    { name: "FINAL FANTASY Ⅱ", aliases: [], learnedAliases: [] },
+  ]);
+  equal(differentSequel.createNew, true, "異なる作品番号を近似一致させない");
+
+  const sameSequel = classifyProject("FINAL FANTASY Ⅱ REMAKE 実況 #1", [
+    { name: "FINAL FANTASY Ⅱ", aliases: [], learnedAliases: [] },
+  ]);
+  equal(sameSequel.projectName, "FINAL FANTASY Ⅱ", "同じ作品番号の副題や話数は許可する");
+  equal(sameSequel.createNew, false, "同じ番号の作品は既存フォルダーへ分類する");
+
+  const episodeNumber = classifyProject("Minecraft #1", [
+    { name: "Minecraft", aliases: [], learnedAliases: [] },
+  ]);
+  equal(episodeNumber.projectName, "Minecraft", "#付きの話数を作品番号として扱わない");
+
+  const mixLabel = classifyProject("作業用BGM MIX", [
+    { name: "作業用BGM", aliases: [], learnedAliases: [] },
+  ]);
+  equal(mixLabel.projectName, "作業用BGM", "MIXをローマ数字の作品番号として扱わない");
+
   const learningProject = { name: "正式名", aliases: [], learnedAliases: [] };
   equal(rememberLearnedAlias(learningProject, "実況での表記"), true, "別名を学習する");
   equal(rememberLearnedAlias(learningProject, "実況での表記"), false, "重複学習を防ぐ");
