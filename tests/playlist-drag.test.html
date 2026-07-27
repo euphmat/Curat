@@ -1,0 +1,105 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script>
+  const DATA_KEY = "playlog:data:v1";
+  const now = "2026-07-27T00:00:00.000Z";
+  const series = ["a", "b", "c", "d"].map((id) => ({
+    id,
+    title: `プレイリスト ${id.toUpperCase()}`,
+    channelTitle: `チャンネル ${id.toUpperCase()}`,
+    project: id === "d" ? "別フォルダー" : "テスト",
+    thumbnail: "",
+    tasks: [],
+    createdAt: now,
+    updatedAt: now,
+  }));
+  localStorage.setItem(DATA_KEY, JSON.stringify({
+    version: 1,
+    updatedAt: now,
+    series,
+    projects: [
+      { name: "テスト", aliases: [], learnedAliases: [] },
+      { name: "別フォルダー", aliases: [], learnedAliases: [] },
+    ],
+    playlistOrder: ["a", "b", "c", "d"],
+  }));
+
+  const frame = document.querySelector("iframe");
+  frame.addEventListener("load", () => {
+    setTimeout(() => {
+      const appDocument = frame.contentDocument;
+      const source = appDocument.querySelector('[data-project-series="c"]');
+      const target = appDocument.querySelector('[data-project-series="b"]');
+      const dataTransfer = new DataTransfer();
+      const targetRect = target.getBoundingClientRect();
+
+      source.dispatchEvent(new DragEvent("dragstart", {
+        bubbles: true,
+        dataTransfer,
+      }));
+      target.dispatchEvent(new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        clientY: targetRect.top + 1,
+        dataTransfer,
+      }));
+      target.dispatchEvent(new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        clientY: targetRect.top + 1,
+        dataTransfer,
+      }));
+
+      setTimeout(() => {
+        const firstRenderedOrder = [
+          ...appDocument.querySelectorAll('[data-drop-project="テスト"] [data-project-series]'),
+        ].map((item) => item.dataset.projectSeries);
+        const nextSource = appDocument.querySelector('[data-project-series="a"]');
+        const nextTarget = appDocument.querySelector('[data-project-series="d"]');
+        const nextTransfer = new DataTransfer();
+        const nextRect = nextTarget.getBoundingClientRect();
+
+        nextSource.dispatchEvent(new DragEvent("dragstart", {
+          bubbles: true,
+          dataTransfer: nextTransfer,
+        }));
+        nextTarget.dispatchEvent(new DragEvent("dragover", {
+          bubbles: true,
+          cancelable: true,
+          clientY: nextRect.bottom - 1,
+          dataTransfer: nextTransfer,
+        }));
+        nextTarget.dispatchEvent(new DragEvent("drop", {
+          bubbles: true,
+          cancelable: true,
+          clientY: nextRect.bottom - 1,
+          dataTransfer: nextTransfer,
+        }));
+
+        setTimeout(() => {
+          const movedFolderOrder = [
+            ...appDocument.querySelectorAll(
+              '[data-drop-project="別フォルダー"] [data-project-series]',
+            ),
+          ].map((item) => item.dataset.projectSeries);
+          const saved = JSON.parse(localStorage.getItem(DATA_KEY));
+          const movedSeries = saved.series.find((item) => item.id === "a");
+          const passed =
+            JSON.stringify(firstRenderedOrder) === JSON.stringify(["a", "c", "b"]) &&
+            JSON.stringify(movedFolderOrder) === JSON.stringify(["d", "a"]) &&
+            JSON.stringify(saved.playlistOrder) === JSON.stringify(["c", "b", "d", "a"]) &&
+            movedSeries.project === "別フォルダー";
+          document.querySelector("#result").textContent = passed
+            ? "PASS drag reorder and cross-folder positioning are persisted"
+            : `FAIL first=${JSON.stringify(firstRenderedOrder)} moved=${JSON.stringify(movedFolderOrder)} saved=${JSON.stringify(saved.playlistOrder)} project=${movedSeries.project}`;
+          document.title = passed ? "PASS" : "FAIL";
+          localStorage.removeItem(DATA_KEY);
+        }, 100);
+      }, 100);
+    }, 500);
+  }, { once: true });
+  frame.src = "../index.html";
+</script>

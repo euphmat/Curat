@@ -12,6 +12,7 @@
       const checks = [
         ["分類モジュールを読み込める", Boolean(appWindow.CuratProjectMatch)],
         ["並び替えモジュールを読み込める", Boolean(appWindow.CuratPlaylistOrder)],
+        ["フォルダー順序モジュールを読み込める", Boolean(appWindow.CuratFolderOrder)],
         [
           "アプリの初期描画が完了する",
           Boolean(appDocument.querySelector(".workspace-welcome, .workspace .detail-layout")),
@@ -23,6 +24,10 @@
         [
           "プレイリスト順序のアセットを参照できる",
           [...appDocument.scripts].some((script) => script.src.endsWith("/playlist-order.js")),
+        ],
+        [
+          "フォルダー順序のアセットを参照できる",
+          [...appDocument.scripts].some((script) => script.src.endsWith("/folder-order.js")),
         ],
         [
           "旧サイドバーナビゲーションが削除されている",

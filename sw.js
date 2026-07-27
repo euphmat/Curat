@@ -1,4 +1,4 @@
-const CACHE_NAME = "curat-shell-v12";
+const CACHE_NAME = "curat-shell-v13";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./episode-sort.js",
   "./project-match.js",
   "./playlist-order.js",
+  "./folder-order.js",
   "./app.js",
   "./favicon.svg",
   "./manifest.webmanifest",

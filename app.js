@@ -17,6 +17,7 @@ const {
   sortSeriesByPlaylistOrder,
   reorderVisiblePlaylistOrder,
 } = window.CuratPlaylistOrder;
+const { compareFolderNames } = window.CuratFolderOrder;
 
 const defaultData = () => ({
   version: APP_VERSION,
@@ -347,7 +348,7 @@ function renderProjectTree() {
 
   const query = normalizeText(elements.projectSearch.value.trim());
   const visibleGroups = [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b, "ja"))
+    .sort(([a], [b]) => compareFolderNames(a, b))
     .filter(([project, seriesList]) => {
       const aliases = projectMatchTerms(project);
       return (
@@ -845,7 +846,7 @@ function openProjectDialog(seriesId) {
   elements.projectAliases.value = (projectRuleByName(editingProjectOriginalName)?.aliases || []).join("\n");
   elements.projectAliases.dataset.forProject = editingProjectOriginalName;
   $("#projectPlaylistName").textContent = `移動するプレイリスト：${series.title}`;
-  const projects = projectNames().sort((a, b) => a.localeCompare(b, "ja"));
+  const projects = projectNames().sort(compareFolderNames);
   $("#projectNameOptions").innerHTML = projects
     .map((project) => `<option value="${escapeHtml(project)}"></option>`)
     .join("");
@@ -1250,13 +1251,12 @@ function handleProjectDragOver(event) {
   const series = data.series.find((item) => item.id === draggedSeriesId);
   const currentProject = (series?.project || series?.title || "").trim();
   const targetPlaylist = playlistButtonFromDropTarget(event.target);
-  const canReorder =
+  const canPositionPlaylist =
     series &&
-    currentProject === group.dataset.dropProject &&
     targetPlaylist &&
     targetPlaylist.dataset.projectSeries !== draggedSeriesId;
 
-  if (canReorder) {
+  if (canPositionPlaylist) {
     const targetRow = targetPlaylist.closest(".project-playlist-row");
     const rect = targetRow.getBoundingClientRect();
     const placement = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
@@ -1288,26 +1288,33 @@ function handleProjectDrop(event) {
   const series = data.series.find((item) => item.id === seriesId);
   const targetPlaylist = playlistButtonFromDropTarget(event.target);
   const currentProject = (series?.project || series?.title || "").trim();
-  const isReorder =
+  const isPlaylistDrop =
     series &&
-    currentProject === group.dataset.dropProject &&
     targetPlaylist &&
     targetPlaylist.dataset.projectSeries !== seriesId;
 
-  if (isReorder) {
+  if (isPlaylistDrop) {
     event.preventDefault();
     const placement = activePlaylistDropPlacement || "before";
-    const visibleIds = $$("[data-project-series]", group).map(
-      (item) => item.dataset.projectSeries,
+    const normalizedOrder = normalizePlaylistOrder(data.series, data.playlistOrder);
+    const renderedIds = new Set(
+      $$("[data-project-series]", elements.projectTree).map(
+        (item) => item.dataset.projectSeries,
+      ),
     );
+    const visibleIds = normalizedOrder.filter((id) => renderedIds.has(id));
     data.playlistOrder = reorderVisiblePlaylistOrder(
-      normalizePlaylistOrder(data.series, data.playlistOrder),
+      normalizedOrder,
       visibleIds,
       seriesId,
       targetPlaylist.dataset.projectSeries,
       placement,
     );
     clearPlaylistDragState();
+    if (currentProject !== group.dataset.dropProject) {
+      moveSeriesToProject(seriesId, group.dataset.dropProject);
+      return;
+    }
     saveData();
     render();
     showToast("プレイリストの並び順を保存しました");

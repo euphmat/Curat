@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>folder-order tests</title>
+<pre id="result">running</pre>
+<script src="../folder-order.js"></script>
+<script>
+  const {
+    romanToNumber,
+    folderSortKey,
+    compareFolderNames,
+  } = window.CuratFolderOrder;
+  const failures = [];
+  let assertions = 0;
+
+  function equal(actual, expected, message) {
+    assertions += 1;
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      failures.push(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+  }
+
+  equal(romanToNumber("IV"), 4, "減算表記のローマ数字を数値化する");
+  equal(romanToNumber("Ⅻ"), 12, "全角ローマ数字を数値化する");
+  equal(romanToNumber("IIII"), null, "不正なローマ数字は数値化しない");
+  equal(folderSortKey("FINALFANTASY III").baseName, "finalfantasy", "空白の有無を吸収する");
+
+  equal(
+    [
+      "FINAL FANTASY IV",
+      "FINALFANTASY III",
+      "FINAL FANTASY",
+      "FINAL FANTASY II",
+    ].sort(compareFolderNames),
+    [
+      "FINAL FANTASY",
+      "FINAL FANTASY II",
+      "FINALFANTASY III",
+      "FINAL FANTASY IV",
+    ],
+    "同一シリーズの末尾ローマ数字を数値順に並べる",
+  );
+
+  equal(
+    ["DRAGON QUEST Ⅹ", "DRAGON QUEST Ⅳ", "DRAGON QUEST Ⅸ"].sort(compareFolderNames),
+    ["DRAGON QUEST Ⅳ", "DRAGON QUEST Ⅸ", "DRAGON QUEST Ⅹ"],
+    "全角ローマ数字も数値順に並べる",
+  );
+
+  equal(
+    ["GAME 10", "GAME 2", "GAME 1"].sort(compareFolderNames),
+    ["GAME 1", "GAME 2", "GAME 10"],
+    "通常の数字にも自然順を維持する",
+  );
+
+  equal(
+    ["MIX", "MIX II"].sort(compareFolderNames),
+    ["MIX", "MIX II"],
+    "単語中のローマ数字風文字列を作品番号にしない",
+  );
+
+  const output = failures.length
+    ? `FAIL ${failures.length}/${assertions}\n${failures.join("\n")}`
+    : `PASS ${assertions}/${assertions}`;
+  document.querySelector("#result").textContent = output;
+  document.title = failures.length ? "FAIL" : "PASS";
+</script>
