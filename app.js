@@ -235,7 +235,12 @@ function saveData({ syncFile = true } = {}) {
     }
   }
   data.updatedAt = new Date().toISOString();
-  localStorage.setItem(DATA_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(DATA_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.warn("localStorage の容量制限（QuotaExceededError）を検出したため IndexedDB のみ保存します", error);
+  }
+  saveDataToIDB(data);
   if (syncFile && saveFileHandle) {
     clearTimeout(fileSaveTimer);
     fileSaveTimer = setTimeout(() => writeConnectedFile(), 350);
@@ -2032,13 +2037,59 @@ async function deleteAllPlaylistsAndFolders() {
 
 async function openHandleDb() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
+    const request = indexedDB.open(DB_NAME, 2);
     request.onupgradeneeded = () => {
-      request.result.createObjectStore("handles");
+      const db = request.result;
+      if (!db.objectStoreNames.contains("handles")) {
+        db.createObjectStore("handles");
+      }
+      if (!db.objectStoreNames.contains("appData")) {
+        db.createObjectStore("appData");
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+}
+
+async function saveDataToIDB(dataToSave) {
+  try {
+    const db = await openHandleDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("appData", "readwrite");
+      tx.objectStore("appData").put(dataToSave, "mainData");
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (error) {
+    console.warn("IndexedDB への保存に失敗しました", error);
+  }
+}
+
+async function loadDataFromIDB() {
+  try {
+    const db = await openHandleDb();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction("appData").objectStore("appData").get("mainData");
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.warn("IndexedDB からの読み込みに失敗しました", error);
+    return null;
+  }
+}
+
+async function restoreIDBData() {
+  const idbData = await loadDataFromIDB();
+  if (idbData && Array.isArray(idbData.series)) {
+    const idbUpdatedAt = new Date(idbData.updatedAt || 0);
+    const currentUpdatedAt = new Date(data.updatedAt || 0);
+    if (idbData.series.length > data.series.length || idbUpdatedAt >= currentUpdatedAt) {
+      data = migrateData(idbData);
+      render();
+    }
+  }
 }
 
 async function storeFileHandle(handle) {
@@ -2843,6 +2894,7 @@ if ("serviceWorker" in navigator) {
 
 render();
 restoreFileConnection();
+restoreIDBData();
 updateSidebarControls();
 
 const initialSeriesId = location.hash.startsWith("#series=")
