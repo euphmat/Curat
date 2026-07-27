@@ -11,10 +11,18 @@
       const appDocument = frame.contentDocument;
       const checks = [
         ["分類モジュールを読み込める", Boolean(appWindow.CuratProjectMatch)],
-        ["アプリの初期描画が完了する", Boolean(appDocument.querySelector(".project-empty"))],
+        ["並び替えモジュールを読み込める", Boolean(appWindow.CuratPlaylistOrder)],
+        [
+          "アプリの初期描画が完了する",
+          Boolean(appDocument.querySelector(".workspace-welcome, .workspace .detail-layout")),
+        ],
         [
           "サービスワーカー用アセットを参照できる",
           [...appDocument.scripts].some((script) => script.src.endsWith("/project-match.js")),
+        ],
+        [
+          "プレイリスト順序のアセットを参照できる",
+          [...appDocument.scripts].some((script) => script.src.endsWith("/playlist-order.js")),
         ],
         [
           "旧サイドバーナビゲーションが削除されている",
@@ -29,12 +37,42 @@
           Boolean(appDocument.querySelector(".sidebar > .project-nav")),
         ],
         [
+          "右側の詳細サイドバーが完全に削除されている",
+          !appDocument.querySelector(".detail-sidebar, #detailSidebar"),
+        ],
+        [
+          "中央がプレイリスト管理ワークスペースになっている",
+          Boolean(appDocument.querySelector(".main > #detailView #detailContent")),
+        ],
+        [
+          "プレイリスト追加フォームがヘッダーにある",
+          Boolean(appDocument.querySelector(".topbar > #playlistForm #playlistUrl")),
+        ],
+        [
           "フォルダー名を Enter キーで保存できる",
           appDocument.querySelectorAll("#folderForm button[type='submit']").length === 1 &&
             appDocument.querySelector("#folderForm button[type='submit']")?.id === "saveFolder" &&
+            appDocument.querySelector("#saveFolder")?.hasAttribute("data-default-action") &&
             [...appDocument.querySelectorAll("#folderForm button[value='cancel']")].every(
               (button) => button.type === "button",
             ),
+        ],
+        [
+          "API キーを Enter キーで保存できる",
+          appDocument.querySelector("#settingsForm #saveSettings")?.type === "submit" &&
+            appDocument.querySelector("#saveSettings")?.hasAttribute("data-default-action") &&
+            appDocument.querySelector("#settingsForm .close-button")?.type === "button",
+        ],
+        [
+          "分類ルールを Enter キーで保存できる",
+          appDocument.querySelectorAll("#projectForm button[type='submit']").length === 1 &&
+            appDocument.querySelector("#saveProject")?.hasAttribute("data-default-action") &&
+            appDocument.querySelector("#projectForm .close-button")?.type === "button",
+        ],
+        [
+          "確認ダイアログの既定アクションが確定になっている",
+          appDocument.querySelector("#confirmForm #confirmAction")?.type === "submit" &&
+            appDocument.querySelector("#confirmAction")?.hasAttribute("data-default-action"),
         ],
       ];
       const failures = checks.filter(([, passed]) => !passed).map(([name]) => name);

@@ -153,16 +153,30 @@
             aria-expanded="true"
             aria-label="左サイドバーを隠す"
           ><svg class="icon" aria-hidden="true"><use href="#icon-menu"></use></svg></button>
-          <div>
+          <div class="topbar-title">
+            <span class="topbar-eyebrow">PLAYLIST WORKSPACE</span>
             <h1 id="viewTitle">実況ライブラリ</h1>
           </div>
-          <div class="topbar-actions">
-            <label class="search">
-              <svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg>
-              <span class="sr-only">プレイリストを検索</span>
-              <input id="searchInput" type="search" placeholder="プレイリストを検索" autocomplete="off" />
-              <kbd>⌘ K</kbd>
+          <form class="header-add-form" id="playlistForm">
+            <label class="header-url-input">
+              <span class="youtube-dot" aria-hidden="true"><svg class="youtube-icon"><use href="#icon-youtube"></use></svg></span>
+              <span class="sr-only">YouTube プレイリスト URL</span>
+              <input
+                id="playlistUrl"
+                type="text"
+                inputmode="url"
+                placeholder="YouTube プレイリスト URL を追加"
+                autocomplete="off"
+                required
+              />
             </label>
+            <button class="header-add-button" type="submit" data-default-action>
+              <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+              <span>追加</span>
+            </button>
+            <p class="header-form-message" id="formMessage" role="status" aria-live="polite"></p>
+          </form>
+          <div class="topbar-actions">
             <button class="icon-button" id="syncAll" type="button" title="すべて再同期" aria-label="すべて再同期"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg></button>
             <button
               class="delete-all-button"
@@ -177,102 +191,21 @@
           </div>
         </header>
 
-        <section class="content">
-          <section class="add-panel" aria-labelledby="addTitle">
-            <div class="add-copy">
-              <div>
-                <h2 id="addTitle">プレイリストを追加</h2>
-                <p>YouTube プレイリストの URL を貼るだけ。</p>
-              </div>
-            </div>
-            <form class="add-form" id="playlistForm">
-              <label class="url-input">
-                <span class="youtube-dot" aria-hidden="true"><svg class="youtube-icon"><use href="#icon-youtube"></use></svg></span>
-                <span class="sr-only">YouTube プレイリスト URL</span>
-                <input
-                  id="playlistUrl"
-                  type="text"
-                  inputmode="url"
-                  placeholder="https://youtube.com/playlist?list=..."
-                  autocomplete="off"
-                  required
-                />
-              </label>
-              <button class="primary-button" type="submit">
-                <span>取り込む</span><svg class="icon button-icon" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>
-              </button>
-            </form>
-            <p class="form-message" id="formMessage" role="status" aria-live="polite"></p>
-          </section>
-
-          <section class="overview" id="overview" aria-label="視聴サマリー">
-            <article class="stat-card stat-dark">
-              <span class="stat-label">プレイリスト</span>
-              <strong id="seriesStat">0</strong>
-            </article>
-            <article class="stat-card">
-              <span class="stat-label">未視聴動画</span>
-              <strong id="todoStat">0</strong>
-            </article>
-            <article class="stat-card stat-accent">
-              <span class="stat-label">全体の視聴進捗</span>
-              <strong id="progressStat">0%</strong>
-              <div class="mini-progress"><span id="progressBar"></span></div>
-            </article>
-          </section>
-
-          <section class="library-section">
-            <div class="section-heading">
-              <div>
-                <h2 id="sectionTitle">実況プレイリスト</h2>
-              </div>
-              <div class="filter-row" role="group" aria-label="表示フィルター">
-                <button class="filter-chip is-active" type="button" data-filter="all"><svg class="icon" aria-hidden="true"><use href="#icon-library"></use></svg>すべて</button>
-                <button class="filter-chip" type="button" data-filter="active"><svg class="icon" aria-hidden="true"><use href="#icon-play"></use></svg>視聴中</button>
-                <button class="filter-chip" type="button" data-filter="unstarted"><svg class="icon" aria-hidden="true"><use href="#icon-list-video"></use></svg>未視聴</button>
-                <button class="filter-chip" type="button" data-filter="done"><svg class="icon" aria-hidden="true"><use href="#icon-check-circle"></use></svg>視聴完了</button>
-              </div>
-            </div>
-
-            <div class="series-grid" id="seriesGrid"></div>
-
-            <div class="empty-state" id="emptyState">
-              <div class="empty-art" aria-hidden="true">
-                <div class="empty-window">
-                  <span></span><span></span><span></span>
-                  <div class="empty-play">▶</div>
-                </div>
-                <div class="empty-spark spark-one">✦</div>
-                <div class="empty-spark spark-two">＋</div>
-              </div>
-              <h2>最初のプレイリストを<br />登録しよう</h2>
-              <p>上の欄にプレイリスト URL を貼り付けると、<br />動画が視聴タスクとして並びます。</p>
-              <button class="text-button" id="emptyAdd" type="button">URL を入力する <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up"></use></svg></button>
-            </div>
-          </section>
+        <section class="workspace" id="detailView" aria-label="プレイリスト ワークスペース">
+          <div id="detailContent"></div>
         </section>
       </main>
     </div>
 
     <div class="sidebar-scrim" id="sidebarScrim"></div>
 
-    <aside
-      class="detail-sidebar"
-      id="detailSidebar"
-      aria-label="プレイリスト詳細"
-      aria-hidden="true"
-      inert
-    >
-      <div id="detailContent"></div>
-    </aside>
-
     <dialog class="sheet-dialog" id="settingsDialog">
-      <form method="dialog" class="sheet">
+      <form method="dialog" class="sheet" id="settingsForm">
         <div class="sheet-head">
           <div>
             <h2>YouTube API 設定</h2>
           </div>
-          <button class="close-button" value="cancel" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
+          <button class="close-button" value="cancel" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
         </div>
         <p class="sheet-lead">
           静的サイトからプレイリストを取得するため、YouTube Data API v3 の API キーをこの端末に保存します。
@@ -299,7 +232,7 @@
             target="_blank"
             rel="noreferrer"
           ><svg class="icon" aria-hidden="true"><use href="#icon-external-link"></use></svg>Cloud Console</a>
-          <button class="primary-button" id="saveSettings" value="default" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>設定を保存</button>
+          <button class="primary-button" id="saveSettings" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>設定を保存</button>
         </div>
       </form>
     </dialog>
@@ -357,7 +290,7 @@
           <div>
             <h2>プレイリストを管理</h2>
           </div>
-          <button class="close-button" value="cancel" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
+          <button class="close-button" value="cancel" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
         </div>
         <p class="sheet-lead">
           同じゲームタイトルを指定したプレイリストは、サイドバーの同じフォルダーにまとまります。
@@ -391,7 +324,7 @@
           </p>
         </div>
         <div class="sheet-actions">
-          <button class="primary-button" id="saveProject" value="default" type="submit"><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>分類ルールを保存</button>
+          <button class="primary-button" id="saveProject" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>分類ルールを保存</button>
         </div>
       </form>
     </dialog>
@@ -432,21 +365,21 @@
           <button class="danger-button" id="deleteFolder" value="cancel" type="button" hidden><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>フォルダーを削除</button>
           <span></span>
           <button class="secondary-button" value="cancel" type="button">キャンセル</button>
-          <button class="primary-button" id="saveFolder" value="default" type="submit"><svg class="icon" aria-hidden="true"><use href="#icon-folder-plus"></use></svg><span>フォルダーを作成</span></button>
+          <button class="primary-button" id="saveFolder" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-folder-plus"></use></svg><span>フォルダーを作成</span></button>
         </div>
       </form>
     </dialog>
 
     <dialog class="confirm-dialog" id="confirmDialog">
-      <form method="dialog" class="confirm-card">
+      <form method="dialog" class="confirm-card" id="confirmForm">
         <span class="confirm-icon" aria-hidden="true"><svg class="icon"><use href="#icon-alert"></use></svg></span>
         <div>
           <h2 id="confirmTitle">確認</h2>
           <p id="confirmMessage"></p>
         </div>
         <div class="sheet-actions">
-          <button class="secondary-button" value="cancel">キャンセル</button>
-          <button class="danger-button" id="confirmAction" value="confirm"><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg><span>削除する</span></button>
+          <button class="secondary-button" value="cancel" type="submit">キャンセル</button>
+          <button class="danger-button" id="confirmAction" value="confirm" type="submit" data-default-action autofocus><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg><span>削除する</span></button>
         </div>
       </form>
     </dialog>
@@ -455,38 +388,9 @@
 
     <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
 
-    <template id="seriesCardTemplate">
-      <article class="series-card">
-        <button class="series-cover" type="button" data-action="open">
-          <img alt="" loading="lazy" />
-          <span class="series-state"></span>
-          <span class="cover-arrow" aria-hidden="true"><svg class="icon"><use href="#icon-external-link"></use></svg></span>
-        </button>
-        <div class="series-body">
-          <div class="series-meta">
-            <span class="episode-count"></span>
-            <button class="more-button" type="button" data-action="menu" aria-label="その他"><svg class="icon" aria-hidden="true"><use href="#icon-more"></use></svg></button>
-          </div>
-          <button class="series-title-button" type="button" data-action="open">
-            <h3></h3>
-          </button>
-          <p class="channel-name"></p>
-          <div class="card-progress">
-            <div class="progress-copy">
-              <strong></strong>
-            </div>
-            <div class="progress-track"><span></span></div>
-          </div>
-          <button class="continue-button" type="button" data-action="continue">
-            <span class="continue-icon"><svg class="icon" aria-hidden="true"><use href="#icon-play"></use></svg></span>
-            <span class="continue-label">続きを見る</span>
-          </button>
-        </div>
-      </article>
-    </template>
-
     <script src="./episode-sort.js"></script>
     <script src="./project-match.js"></script>
+    <script src="./playlist-order.js"></script>
     <script src="./app.js" type="module"></script>
   </body>
 </html>

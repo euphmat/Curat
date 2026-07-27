@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>playlist-order tests</title>
+<pre id="result">running</pre>
+<script src="../playlist-order.js"></script>
+<script>
+  const {
+    normalizePlaylistOrder,
+    sortSeriesByPlaylistOrder,
+    reorderVisiblePlaylistOrder,
+  } = window.CuratPlaylistOrder;
+  const failures = [];
+  let assertions = 0;
+
+  function equal(actual, expected, message) {
+    assertions += 1;
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      failures.push(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+  }
+
+  const series = [
+    { id: "a", updatedAt: "2026-01-01T00:00:00Z" },
+    { id: "b", updatedAt: "2026-03-01T00:00:00Z" },
+    { id: "c", updatedAt: "2026-02-01T00:00:00Z" },
+  ];
+
+  equal(
+    normalizePlaylistOrder(series, []),
+    ["b", "c", "a"],
+    "旧データは更新日時の新しい順を初期順序にする",
+  );
+  equal(
+    normalizePlaylistOrder(series, ["c", "missing", "c", "a"]),
+    ["c", "a", "b"],
+    "保存順序の欠損と重複を修復する",
+  );
+  equal(
+    sortSeriesByPlaylistOrder(series, ["a", "c", "b"]).map((item) => item.id),
+    ["a", "c", "b"],
+    "保存された任意順序でプレイリストを返す",
+  );
+  equal(
+    reorderVisiblePlaylistOrder(["a", "b", "c", "d"], ["a", "b", "c", "d"], "d", "b", "before"),
+    ["a", "d", "b", "c"],
+    "対象カードの前へ移動する",
+  );
+  equal(
+    reorderVisiblePlaylistOrder(["a", "b", "c", "d"], ["a", "c"], "a", "c", "after"),
+    ["c", "b", "a", "d"],
+    "絞り込み中は非表示カードの位置を維持する",
+  );
+  equal(
+    reorderVisiblePlaylistOrder(["a", "b"], ["a", "b"], "a", "a", "after"),
+    ["a", "b"],
+    "自分自身へのドロップでは順序を変えない",
+  );
+
+  const output = failures.length
+    ? `FAIL ${failures.length}/${assertions}\n${failures.join("\n")}`
+    : `PASS ${assertions}/${assertions}`;
+  document.querySelector("#result").textContent = output;
+  document.title = failures.length ? "FAIL" : "PASS";
+</script>

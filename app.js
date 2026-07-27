@@ -6,19 +6,20 @@ const HANDLE_KEY = "save-file";
 const API_BASE = "https://www.googleapis.com/youtube/v3";
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 480;
-const DETAIL_PIN_MEDIA = window.matchMedia("(min-width: 1100px)");
 const { parseEpisodeOrder, sortPlaylistTasks } = window.PlaylogEpisodeSort;
 const {
   normalizeForProjectMatch,
   classifyProject,
   rememberLearnedAlias,
 } = window.CuratProjectMatch;
+const { normalizePlaylistOrder } = window.CuratPlaylistOrder;
 
 const defaultData = () => ({
   version: APP_VERSION,
   updatedAt: new Date().toISOString(),
   series: [],
   projects: [],
+  playlistOrder: [],
 });
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -30,17 +31,9 @@ const elements = {
   form: $("#playlistForm"),
   url: $("#playlistUrl"),
   formMessage: $("#formMessage"),
-  grid: $("#seriesGrid"),
-  empty: $("#emptyState"),
-  template: $("#seriesCardTemplate"),
-  seriesStat: $("#seriesStat"),
-  todoStat: $("#todoStat"),
-  progressStat: $("#progressStat"),
-  progressBar: $("#progressBar"),
-  search: $("#searchInput"),
   syncAll: $("#syncAll"),
   deleteAll: $("#deleteAll"),
-  detailSidebar: $("#detailSidebar"),
+  detailView: $("#detailView"),
   detailContent: $("#detailContent"),
   settingsDialog: $("#settingsDialog"),
   apiKey: $("#apiKeyInput"),
@@ -66,7 +59,6 @@ const elements = {
 
 let data = loadData();
 let config = loadConfig();
-let activeFilter = "all";
 let detailSeriesId = null;
 let saveFileHandle = null;
 let fileSaveTimer = null;
@@ -81,12 +73,10 @@ let editingFolderOriginalName = null;
 let selectedTreeKey = "";
 let contextTarget = null;
 let confirmResolver = null;
+let importHighlightTimer = null;
 
 if (config.sidebarCollapsed && window.matchMedia("(min-width: 781px)").matches) {
   document.body.classList.add("sidebar-collapsed");
-}
-if (config.detailPinned && DETAIL_PIN_MEDIA.matches) {
-  document.body.classList.add("detail-pinned");
 }
 if (Number.isFinite(config.sidebarWidth)) {
   const sidebarWidth = Math.min(
@@ -138,6 +128,7 @@ function migrateData(saved) {
     ...saved,
     version: APP_VERSION,
     series: migratedSeries,
+    playlistOrder: normalizePlaylistOrder(migratedSeries, saved.playlistOrder),
     projects: [
       ...savedProjects.map((project) => ({
         name: project.name,
@@ -151,7 +142,9 @@ function migrateData(saved) {
 
 function loadConfig() {
   try {
-    return { apiKey: "", ...JSON.parse(localStorage.getItem(CONFIG_KEY)) };
+    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
+    delete saved.detailPinned;
+    return { apiKey: "", ...saved };
   } catch {
     return { apiKey: "" };
   }
@@ -162,6 +155,7 @@ function saveConfig() {
 }
 
 function saveData({ syncFile = true } = {}) {
+  data.playlistOrder = normalizePlaylistOrder(data.series, data.playlistOrder);
   data.updatedAt = new Date().toISOString();
   localStorage.setItem(DATA_KEY, JSON.stringify(data));
   if (syncFile && saveFileHandle) {
@@ -313,41 +307,15 @@ function getGlobalStats() {
   };
 }
 
-function seriesMatchesView(series) {
-  const stats = getSeriesStats(series);
-  if (activeFilter === "active") return stats.doing > 0 || (stats.done > 0 && stats.progress < 100);
-  if (activeFilter === "unstarted") return stats.done === 0 && stats.doing === 0;
-  if (activeFilter === "done") return stats.total > 0 && stats.progress === 100;
-  return true;
-}
-
-function filteredSeries() {
-  const query = normalizeText(elements.search.value);
-  return data.series
-    .filter(seriesMatchesView)
-    .filter((series) => {
-      if (!query) return true;
-      return normalizeText(`${series.title} ${series.channelTitle}`).includes(query);
-    })
-    .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-}
-
 function render() {
-  const global = getGlobalStats();
-  elements.seriesStat.textContent = global.series;
-  elements.todoStat.textContent = global.todo;
-  elements.progressStat.textContent = `${global.progress}%`;
-  elements.progressBar.style.width = `${global.progress}%`;
   elements.deleteAll.disabled = data.series.length === 0 && data.projects.length === 0;
-
-  const seriesList = filteredSeries();
-  elements.grid.replaceChildren(...seriesList.map(createSeriesCard));
-  elements.empty.hidden = seriesList.length > 0;
-  renderEmptyState(seriesList.length);
   renderProjectTree();
 
-  if (detailSeriesId && elements.detailSidebar.classList.contains("is-open")) {
+  if (detailSeriesId && data.series.some((series) => series.id === detailSeriesId)) {
     renderDetail(detailSeriesId);
+  } else {
+    detailSeriesId = null;
+    renderWorkspaceEmpty();
   }
 }
 
@@ -493,53 +461,6 @@ function renderProjectTree() {
     .join("");
 }
 
-function renderEmptyState(visibleCount) {
-  const title = $(".empty-state h2", elements.empty);
-  const copy = $(".empty-state > p", elements.empty);
-  const button = $("#emptyAdd");
-  if (data.series.length && visibleCount === 0) {
-    title.innerHTML = "条件に合うプレイリストが<br />ありません";
-    copy.innerHTML = "検索ワードやフィルターを変更してみてください。";
-    button.textContent = "すべて表示";
-    button.dataset.mode = "clear";
-  } else {
-    title.innerHTML = "最初のプレイリストを<br />登録しよう";
-    copy.innerHTML = "上の欄にプレイリスト URL を貼り付けると、<br />動画が視聴タスクとして並びます。";
-    button.innerHTML = `URL を入力する ${icon("arrow-up")}`;
-    button.dataset.mode = "add";
-  }
-}
-
-function createSeriesCard(series) {
-  const fragment = elements.template.content.cloneNode(true);
-  const card = $(".series-card", fragment);
-  const stats = getSeriesStats(series);
-  card.dataset.id = series.id;
-  card.dataset.dragSeries = series.id;
-  card.draggable = true;
-  const image = $(".series-cover img", card);
-  image.src = series.thumbnail || "./favicon.svg";
-  image.alt = `${series.title} のサムネイル`;
-  $(".episode-count", card).textContent = `${stats.total} 本`;
-  $("h3", card).textContent = series.title;
-  $(".channel-name", card).textContent = series.channelTitle || "YouTube プレイリスト";
-  $(".progress-copy strong", card).textContent = `${stats.done} / ${stats.total}`;
-  $(".progress-track span", card).style.width = `${stats.progress}%`;
-  const state = $(".series-state", card);
-  if (stats.progress === 100 && stats.total) {
-    state.textContent = "視聴完了";
-    state.classList.add("is-done");
-  } else if (stats.doing) {
-    state.textContent = "視聴中";
-  } else {
-    state.textContent = "未視聴";
-    state.classList.add("is-new");
-  }
-  const label = $(".continue-label", card);
-  label.textContent = stats.progress === 100 ? "もう一度見る" : stats.doing ? "続きを見る" : "視聴をはじめる";
-  return card;
-}
-
 async function fetchJson(path, params) {
   const url = new URL(`${API_BASE}/${path}`);
   Object.entries({ ...params, key: config.apiKey }).forEach(([key, value]) => {
@@ -663,6 +584,11 @@ function mergePlaylistResult(playlistId, result) {
     data.series[data.series.indexOf(existing)] = nextSeries;
   } else {
     data.series.unshift(nextSeries);
+    data.playlistOrder = normalizePlaylistOrder(data.series, data.playlistOrder);
+    data.playlistOrder = [
+      nextSeries.id,
+      ...data.playlistOrder.filter((id) => id !== nextSeries.id),
+    ];
   }
   if (!projectRuleByName(nextSeries.project)) {
     data.projects.push({ name: nextSeries.project, aliases: [], learnedAliases: [] });
@@ -670,7 +596,74 @@ function mergePlaylistResult(playlistId, result) {
     learnPlaylistTitle(nextSeries.project, nextSeries.title);
   }
   saveData();
-  return { series: nextSeries, placement };
+  return { series: nextSeries, placement, isNew: !existing };
+}
+
+function revealImportedPlaylist(series) {
+  clearTimeout(importHighlightTimer);
+  elements.projectSearch.value = "";
+  config.expandedProjects ||= {};
+  config.expandedProjects[series.project] = true;
+  selectedTreeKey = `playlist:${series.id}`;
+
+  const mobile = window.matchMedia("(max-width: 780px)").matches;
+  const sidebarWasHidden = mobile
+    ? !document.body.classList.contains("sidebar-open")
+    : document.body.classList.contains("sidebar-collapsed");
+  if (mobile) {
+    renderProjectTree();
+    return;
+  } else {
+    document.body.classList.remove("sidebar-collapsed");
+    config.sidebarCollapsed = false;
+  }
+  saveConfig();
+  updateSidebarControls();
+  renderProjectTree();
+
+  const startHighlight = () => {
+    const folder = [...elements.projectTree.querySelectorAll("[data-drop-project]")].find(
+      (item) => item.dataset.dropProject === series.project,
+    );
+    const playlist = [...elements.projectTree.querySelectorAll("[data-project-series]")].find(
+      (item) => item.dataset.projectSeries === series.id,
+    );
+    if (!folder || !playlist) return;
+
+    const folderRow = $("[data-tree-folder]", folder);
+    const playlistRow = playlist.closest(".project-playlist-row");
+    const badge = document.createElement("span");
+    badge.className = "import-destination-badge";
+    badge.textContent = "追加先";
+    badge.setAttribute("aria-hidden", "true");
+    folderRow?.append(badge);
+    folder.classList.add("is-import-target");
+    playlistRow?.classList.add("is-just-imported");
+    folder.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "center",
+    });
+
+    importHighlightTimer = setTimeout(() => {
+      folder.classList.remove("is-import-target");
+      playlistRow?.classList.remove("is-just-imported");
+      badge.remove();
+    }, 3000);
+  };
+
+  if (sidebarWasHidden) {
+    importHighlightTimer = setTimeout(startHighlight, 280);
+  } else {
+    requestAnimationFrame(() => requestAnimationFrame(startHighlight));
+  }
+}
+
+function openSettingsDialog() {
+  elements.apiKey.value = config.apiKey;
+  if (!elements.settingsDialog.open) elements.settingsDialog.showModal();
+  document.body.classList.remove("sidebar-open");
+  updateSidebarControls();
+  requestAnimationFrame(() => elements.apiKey.select());
 }
 
 async function importPlaylist(input, { quiet = false } = {}) {
@@ -678,14 +671,15 @@ async function importPlaylist(input, { quiet = false } = {}) {
   if (!playlistId) throw new Error("プレイリスト ID を含む YouTube URL を入力してください。");
   if (!config.apiKey) {
     pendingPlaylistUrl = input;
-    elements.apiKey.value = "";
-    elements.settingsDialog.showModal();
+    openSettingsDialog();
     throw new Error("最初に YouTube API キーを設定してください。");
   }
   if (!quiet) setFormLoading(true, "プレイリストを読み込み中…");
   const result = await fetchPlaylist(playlistId);
-  const { series, placement } = mergePlaylistResult(playlistId, result);
+  const { series, placement, isNew } = mergePlaylistResult(playlistId, result);
   render();
+  openSeries(series.id);
+  if (!quiet && isNew) revealImportedPlaylist(series);
   if (!quiet) {
     elements.url.value = "";
     const placementMessage = placement.createNew
@@ -703,7 +697,9 @@ async function importPlaylist(input, { quiet = false } = {}) {
 function setFormLoading(isLoading, message = "") {
   const button = $("button[type='submit']", elements.form);
   button.disabled = isLoading;
-  button.firstElementChild.textContent = isLoading ? "取得中…" : "取り込む";
+  elements.form.setAttribute("aria-busy", String(isLoading));
+  const label = $("span", button);
+  if (label) label.textContent = isLoading ? "取得中…" : "追加";
   if (message) setFormMessage(message, false);
 }
 
@@ -712,57 +708,59 @@ function setFormMessage(message, isError = true) {
   elements.formMessage.style.color = isError ? "var(--orange-dark)" : "var(--ink-soft)";
 }
 
+function renderWorkspaceEmpty() {
+  const stats = getGlobalStats();
+  $("#viewTitle").textContent = "実況ライブラリ";
+  elements.detailView.classList.remove("has-playlist");
+  elements.detailContent.innerHTML = `
+    <div class="workspace-welcome">
+      <div class="welcome-art" aria-hidden="true">
+        <span class="welcome-orbit"></span>
+        <span class="welcome-gem">${icon("play")}</span>
+      </div>
+      <span class="detail-eyebrow">YOUR WATCHING SPACE</span>
+      <h2>${data.series.length ? "プレイリストを選択" : "最初のプレイリストを追加"}</h2>
+      <p>${
+        data.series.length
+          ? "左のエクスプローラーからプレイリストを選ぶと、エピソードと視聴進捗をここで管理できます。"
+          : "ヘッダーに YouTube プレイリストの URL を貼り付けると、エピソードごとの視聴管理を始められます。"
+      }</p>
+      <div class="welcome-stats" aria-label="ライブラリの概要">
+        <div><strong>${stats.series}</strong><span>プレイリスト</span></div>
+        <div><strong>${stats.todo}</strong><span>未視聴動画</span></div>
+        <div><strong>${stats.progress}%</strong><span>全体の進捗</span></div>
+      </div>
+      <button class="welcome-add-button" type="button" data-workspace-action="add">
+        ${icon("plus")}<span>プレイリストを追加</span>
+      </button>
+    </div>
+  `;
+}
+
 function openSeries(seriesId) {
-  if (!elements.detailSidebar.classList.contains("is-open")) {
-    detailReturnFocus = document.activeElement;
-  }
+  const series = data.series.find((item) => item.id === seriesId);
+  if (!series) return;
   detailSeriesId = seriesId;
+  selectedTreeKey = `playlist:${seriesId}`;
+  $("#viewTitle").textContent = getChannelName(series);
+  elements.detailView.classList.add("has-playlist");
   renderDetail(seriesId);
-  elements.detailSidebar.inert = false;
-  elements.detailSidebar.setAttribute("aria-hidden", "false");
-  elements.detailSidebar.classList.add("is-open");
-  document.body.classList.add("detail-open");
+  renderProjectTree();
   history.replaceState(null, "", `#series=${encodeURIComponent(seriesId)}`);
-  requestAnimationFrame(() => $(".detail-close", elements.detailSidebar)?.focus());
+  elements.detailView.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function closeSeriesDetail({ restoreFocus = true } = {}) {
-  if (!elements.detailSidebar.classList.contains("is-open") && !detailSeriesId) return;
-  elements.detailSidebar.classList.remove("is-open");
-  elements.detailSidebar.setAttribute("aria-hidden", "true");
-  elements.detailSidebar.inert = true;
-  document.body.classList.remove("detail-open");
+  if (!detailSeriesId) return;
   detailSeriesId = null;
+  selectedTreeKey = "";
+  renderWorkspaceEmpty();
+  renderProjectTree();
   if (location.hash.startsWith("#series=")) {
     history.replaceState(null, "", `${location.pathname}${location.search}`);
   }
   if (restoreFocus && detailReturnFocus?.isConnected) detailReturnFocus.focus();
   detailReturnFocus = null;
-}
-
-function isDetailPinned() {
-  return Boolean(config.detailPinned && DETAIL_PIN_MEDIA.matches);
-}
-
-function syncDetailPinnedState() {
-  const pinned = isDetailPinned();
-  document.body.classList.toggle("detail-pinned", pinned);
-  const control = $("[data-detail-action='pin']", elements.detailSidebar);
-  if (!control) return;
-  control.setAttribute("aria-pressed", String(pinned));
-  control.setAttribute(
-    "aria-label",
-    pinned ? "右サイドバーの固定を解除" : "右サイドバーを固定",
-  );
-  control.title = pinned
-    ? "固定を解除してメイン画面に重ねる"
-    : "固定してメイン画面と並べる";
-}
-
-function toggleDetailPinned() {
-  config.detailPinned = !isDetailPinned();
-  saveConfig();
-  syncDetailPinnedState();
 }
 
 function renderDetail(seriesId) {
@@ -789,7 +787,6 @@ function renderDetail(seriesId) {
             <span>最終同期 ${escapeHtml(formatDate(series.lastSyncedAt))}</span>
           </div>
         </div>
-        <button class="icon-button detail-close" type="button" data-detail-action="close" aria-label="閉じる">${icon("x")}</button>
       </header>
       <section class="detail-main">
         <div class="detail-toolbar">
@@ -812,14 +809,6 @@ function renderDetail(seriesId) {
             </div>
           </div>
           <div class="detail-actions" role="group" aria-label="プレイリスト操作">
-            <button
-              class="compact-button detail-action-button detail-pin-toggle"
-              type="button"
-              data-detail-action="pin"
-              aria-pressed="${isDetailPinned()}"
-              aria-label="${isDetailPinned() ? "右サイドバーの固定を解除" : "右サイドバーを固定"}"
-              title="${isDetailPinned() ? "固定を解除してメイン画面に重ねる" : "固定してメイン画面と並べる"}"
-            >${icon("pin")}<span class="detail-action-label">固定</span></button>
             <button class="compact-button detail-action-button" type="button" data-detail-action="project" aria-label="フォルダーを変更" title="フォルダーを変更">${icon("folder")}<span class="detail-action-label">移動</span></button>
             <button class="compact-button detail-action-button" type="button" data-detail-action="sync" aria-label="YouTube と再同期" title="YouTube と再同期">${icon("refresh")}<span class="detail-action-label">同期</span></button>
             <a class="compact-button detail-action-button youtube-button" href="${escapeHtml(series.sourceUrl)}" target="_blank" rel="noreferrer" aria-label="YouTube で開く（新しいタブ）" title="YouTube で開く">${icon("youtube", "youtube-icon")}<span class="detail-action-label">YouTube</span></a>
@@ -833,9 +822,11 @@ function renderDetail(seriesId) {
           </div>
           <span class="task-list-count">${tasks.length} 本</span>
         </div>
-        <ol class="task-list">
-          ${tasks.map((task, index) => taskRowHtml(task, index)).join("")}
-        </ol>
+        ${
+          tasks.length
+            ? `<ol class="task-list">${tasks.map((task, index) => taskRowHtml(task, index)).join("")}</ol>`
+            : `<div class="task-empty">${icon("list-video")}<strong>表示できるエピソードがありません</strong><span>同期すると YouTube の最新状態を取得できます。</span></div>`
+        }
       </section>
     </div>
   `;
@@ -1046,10 +1037,12 @@ async function deleteSeries(seriesId) {
   });
   if (!confirmed) return;
   data.series = data.series.filter((item) => item.id !== series.id);
-  if (detailSeriesId === series.id) closeSeriesDetail({ restoreFocus: false });
+  const deletedActiveSeries = detailSeriesId === series.id;
+  if (deletedActiveSeries) detailSeriesId = null;
   saveData();
   selectedTreeKey = "";
   render();
+  if (deletedActiveSeries && data.series[0]) openSeries(data.series[0].id);
   showToast("プレイリストを削除しました");
 }
 
@@ -1327,7 +1320,7 @@ async function syncSeries(seriesId, { quiet = false } = {}) {
   const series = data.series.find((item) => item.id === seriesId);
   if (!series) return;
   if (!config.apiKey) {
-    elements.settingsDialog.showModal();
+    openSettingsDialog();
     throw new Error("YouTube API キーを設定してください。");
   }
   const result = await fetchPlaylist(seriesId);
@@ -1342,7 +1335,7 @@ async function syncAllSeries() {
     return;
   }
   if (!config.apiKey) {
-    elements.settingsDialog.showModal();
+    openSettingsDialog();
     return;
   }
   elements.syncAll.classList.add("is-spinning");
@@ -1559,29 +1552,15 @@ elements.form.addEventListener("submit", async (event) => {
   }
 });
 
-elements.grid.addEventListener("click", (event) => {
-  if (Date.now() < suppressPlaylistClickUntil) return;
-  const actionButton = event.target.closest("[data-action]");
-  const card = event.target.closest(".series-card");
-  if (!actionButton || !card) return;
-  const seriesId = card.dataset.id;
-  if (actionButton.dataset.action === "open") openSeries(seriesId);
-  if (actionButton.dataset.action === "continue") continueSeries(seriesId);
-  if (actionButton.dataset.action === "menu") openProjectDialog(seriesId);
-});
-
 elements.detailContent.addEventListener("click", async (event) => {
+  const workspaceAction = event.target.closest("[data-workspace-action]");
+  if (workspaceAction?.dataset.workspaceAction === "add") {
+    elements.url.focus();
+    return;
+  }
   const control = event.target.closest("[data-detail-action]");
   if (!control) return;
   const action = control.dataset.detailAction;
-  if (action === "close") {
-    closeSeriesDetail();
-    return;
-  }
-  if (action === "pin") {
-    toggleDetailPinned();
-    return;
-  }
   const series = data.series.find((item) => item.id === detailSeriesId);
   if (!series) return;
   if (action === "project") {
@@ -1619,35 +1598,11 @@ elements.detailContent.addEventListener("click", async (event) => {
   }
 });
 
-$$("[data-filter]").forEach((button) => {
-  button.addEventListener("click", () => {
-    activeFilter = button.dataset.filter;
-    $$("[data-filter]").forEach((item) => item.classList.toggle("is-active", item === button));
-    render();
-  });
-});
-
-elements.search.addEventListener("input", render);
 elements.syncAll.addEventListener("click", syncAllSeries);
 elements.deleteAll.addEventListener("click", deleteAllPlaylistsAndFolders);
 
-$("#emptyAdd").addEventListener("click", (event) => {
-  if (event.currentTarget.dataset.mode === "clear") {
-    elements.search.value = "";
-    activeFilter = "all";
-    $$("[data-filter]").forEach((item) => item.classList.toggle("is-active", item.dataset.filter === "all"));
-    render();
-  } else {
-    elements.url.focus();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-});
-
 $("#openSettings").addEventListener("click", () => {
-  elements.apiKey.value = config.apiKey;
-  elements.settingsDialog.showModal();
-  document.body.classList.remove("sidebar-open");
-  updateSidebarControls();
+  openSettingsDialog();
 });
 
 $("#toggleKey").addEventListener("click", (event) => {
@@ -1657,7 +1612,8 @@ $("#toggleKey").addEventListener("click", (event) => {
   event.currentTarget.setAttribute("aria-label", showing ? "API キーを表示" : "API キーを隠す");
 });
 
-$("#saveSettings").addEventListener("click", async () => {
+$("#settingsForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
   config.apiKey = elements.apiKey.value.trim();
   saveConfig();
   elements.settingsDialog.close();
@@ -1674,12 +1630,16 @@ $("#saveSettings").addEventListener("click", async () => {
     }
   }
 });
+$(".close-button", elements.settingsDialog).addEventListener("click", () =>
+  elements.settingsDialog.close(),
+);
 
 $("#openBackup").addEventListener("click", () => {
   updateBackupUI();
   elements.backupDialog.showModal();
   document.body.classList.remove("sidebar-open");
   updateSidebarControls();
+  requestAnimationFrame(() => $("#connectSave").focus());
 });
 $("#closeBackup").addEventListener("click", () => elements.backupDialog.close());
 $("#connectSave").addEventListener("click", connectSaveFile);
@@ -1807,7 +1767,6 @@ elements.projectTree.addEventListener("keydown", (event) => {
   }
 });
 
-elements.grid.addEventListener("dragstart", handlePlaylistDragStart);
 elements.projectTree.addEventListener("dragstart", handlePlaylistDragStart);
 elements.projectTree.addEventListener("dragover", handleProjectDragOver);
 elements.projectTree.addEventListener("drop", handleProjectDrop);
@@ -1888,6 +1847,28 @@ elements.confirmDialog.addEventListener("close", () => {
   settleConfirmation(elements.confirmDialog.returnValue === "confirm");
 });
 
+document.addEventListener("keydown", (event) => {
+  if (
+    event.key !== "Enter" ||
+    event.repeat ||
+    event.isComposing ||
+    event.keyCode === 229
+  ) {
+    return;
+  }
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const isMultiline = target.matches("textarea, [contenteditable='true']");
+  if (isMultiline && !(event.metaKey || event.ctrlKey)) return;
+  if (target.matches("button, a, select")) return;
+
+  const form = target.closest("form");
+  const submitter = form?.querySelector("[data-default-action]");
+  if (!submitter || submitter.disabled) return;
+  event.preventDefault();
+  form.requestSubmit(submitter);
+});
+
 elements.projectName.addEventListener("input", () => {
   const name = elements.projectName.value.trim();
   const rule = projectRuleByName(name);
@@ -1931,6 +1912,9 @@ $("#projectForm").addEventListener("submit", (event) => {
   render();
   showToast(`「${name}」フォルダーへ移動しました`);
 });
+$(".close-button", elements.projectDialog).addEventListener("click", () =>
+  elements.projectDialog.close(),
+);
 
 elements.sidebarResizer.addEventListener("pointerdown", (event) => {
   if (window.matchMedia("(max-width: 780px)").matches) return;
@@ -2032,7 +2016,7 @@ document.addEventListener("pointerdown", (event) => {
 document.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
     event.preventDefault();
-    elements.search.focus();
+    elements.url.focus();
   }
   if (event.altKey && event.key.toLowerCase() === "f") {
     event.preventDefault();
@@ -2054,11 +2038,9 @@ document.addEventListener("keydown", (event) => {
     }
     document.body.classList.remove("sidebar-open");
     updateSidebarControls();
-    if (!document.querySelector("dialog[open]")) closeSeriesDetail();
   }
 });
 
-DETAIL_PIN_MEDIA.addEventListener("change", syncDetailPinnedState);
 window.matchMedia("(max-width: 780px)").addEventListener("change", updateSidebarControls);
 
 window.addEventListener("storage", (event) => {
@@ -2076,11 +2058,14 @@ if ("serviceWorker" in navigator) {
 render();
 restoreFileConnection();
 updateSidebarControls();
-syncDetailPinnedState();
 
 const initialSeriesId = location.hash.startsWith("#series=")
   ? decodeURIComponent(location.hash.slice("#series=".length))
   : "";
 if (initialSeriesId && data.series.some((series) => series.id === initialSeriesId)) {
   openSeries(initialSeriesId);
+} else {
+  const firstSeries =
+    data.series.find((series) => series.id === data.playlistOrder[0]) || data.series[0];
+  if (firstSeries) openSeries(firstSeries.id);
 }

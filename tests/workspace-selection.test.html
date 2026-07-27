@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script>
+  const DATA_KEY = "playlog:data:v1";
+  const now = "2026-07-27T00:00:00.000Z";
+  const series = ["a", "b", "c"].map((id, index) => ({
+    id,
+    title: `プレイリスト ${id.toUpperCase()}`,
+    channelTitle: `チャンネル ${id.toUpperCase()}`,
+    project: "テスト",
+    thumbnail: "",
+    tasks: [],
+    createdAt: now,
+    updatedAt: new Date(Date.parse(now) + index * 1000).toISOString(),
+  }));
+  localStorage.setItem(DATA_KEY, JSON.stringify({
+    version: 1,
+    updatedAt: now,
+    series,
+    projects: [{ name: "テスト", aliases: [], learnedAliases: [] }],
+    playlistOrder: ["a", "b", "c"],
+  }));
+
+  const frame = document.querySelector("iframe");
+  frame.addEventListener("load", () => {
+    setTimeout(() => {
+      const appDocument = frame.contentDocument;
+      const target = appDocument.querySelector('[data-project-series="b"]');
+      target?.click();
+      const detailTitle = appDocument.querySelector(".workspace .detail-hero h2")?.textContent;
+      const selected = appDocument.querySelector(
+        '.project-playlist-row.is-selected [data-project-series="b"]',
+      );
+      const passed =
+        !appDocument.querySelector(".detail-sidebar") &&
+        detailTitle === "プレイリスト B" &&
+        Boolean(selected) &&
+        frame.contentWindow.location.hash === "#series=b";
+      document.querySelector("#result").textContent = passed
+        ? "PASS explorer selection opens the center workspace"
+        : `FAIL title=${detailTitle} selected=${Boolean(selected)} hash=${frame.contentWindow.location.hash}`;
+      document.title = passed ? "PASS" : "FAIL";
+      localStorage.removeItem(DATA_KEY);
+    }, 500);
+  }, { once: true });
+  frame.src = "../index.html";
+</script>
