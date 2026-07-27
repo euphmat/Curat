@@ -16,7 +16,6 @@
         const isButtonType = loadBtn?.type === "button";
 
         // Trigger loadDataJson
-        appWindow.confirm = () => true;
         await appWindow.loadDataJson();
 
         const dataLoaded = Array.isArray(appWindow.data?.series) && appWindow.data.series.length > 0;

@@ -2173,24 +2173,23 @@ async function restoreBackup(file) {
   }
 }
 
-async function loadDataJson() {
+async function loadDataJson(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
   try {
-    const response = await fetch("data.json");
+    const response = await fetch(`data.json?v=${Date.now()}`, { cache: "no-cache" });
     if (!response.ok) {
       throw new Error(`data.json の取得に失敗しました (HTTP ${response.status})`);
     }
-    const payload = await response.json();
+    const text = await response.text();
+    const payload = JSON.parse(text);
     if (!isValidBackup(payload)) throw new Error("Curat のバックアップファイルではありません。");
-    const count = payload.data?.series?.length || 0;
-    if (
-      data.series.length &&
-      !window.confirm(`現在のデータを置き換え、data.json から ${count} 件のプレイリストを読み込みますか？`)
-    ) {
-      return;
-    }
     data = migrateData(payload.data);
     saveData();
     render();
+    const count = payload.data?.series?.length || 0;
     showToast(`data.json から ${count} 件のプレイリストを読み込みました`);
     if (elements.settingsDialog?.open) {
       elements.settingsDialog.close();
