@@ -1,0 +1,90 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script>
+  const DATA_KEY = "playlog:data:v1";
+  const CONFIG_KEY = "playlog:config:v1";
+  const now = "2026-07-27T00:00:00.000Z";
+  localStorage.setItem(DATA_KEY, JSON.stringify({
+    version: 1,
+    updatedAt: now,
+    series: [{
+      id: "folder-popover-series",
+      title: "テストプレイリスト",
+      channelTitle: "テストチャンネル",
+      project: "テストフォルダー",
+      thumbnail: "",
+      tasks: [],
+      createdAt: now,
+      updatedAt: now,
+    }],
+    projects: [{
+      name: "テストフォルダー",
+      aliases: ["旧別名"],
+      learnedAliases: [],
+      icon: "builtin:gamepad",
+    }],
+    playlistOrder: ["folder-popover-series"],
+  }));
+  localStorage.setItem(CONFIG_KEY, JSON.stringify({
+    expandedProjects: { "テストフォルダー": true },
+  }));
+
+  const frame = document.querySelector("iframe");
+  frame.addEventListener("load", () => {
+    setTimeout(() => {
+      const appDocument = frame.contentDocument;
+      const folderRow = [...appDocument.querySelectorAll("[data-tree-folder]")]
+        .find((item) => item.dataset.treeFolder === "テストフォルダー");
+      folderRow.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 220,
+        clientY: 180,
+      }));
+      appDocument.querySelector("[data-context-action='edit-folder']").click();
+
+      setTimeout(() => {
+        const popover = appDocument.querySelector("#folderEditorPopover");
+        const form = appDocument.querySelector("#folderForm");
+        const openedContextually =
+          !appDocument.querySelector("#folderDialog").open &&
+          !popover.hidden &&
+          form.parentElement === popover &&
+          appDocument.activeElement === appDocument.querySelector("#folderNameInput") &&
+          appDocument.querySelector("#folderAliasesInput").value === "旧別名";
+
+        appDocument.querySelector("#folderNameInput").value = "新しいフォルダー名";
+        appDocument.querySelector("#folderAliasesInput").value = "別名A\n別名B";
+        appDocument.querySelector("[data-folder-icon='builtin:sword']").click();
+        form.requestSubmit(appDocument.querySelector("#saveFolder"));
+
+        setTimeout(() => {
+          const saved = JSON.parse(localStorage.getItem(DATA_KEY));
+          const project = saved.projects.find((item) => item.name === "新しいフォルダー名");
+          const renamedRow = [...appDocument.querySelectorAll("[data-tree-folder]")]
+            .find((item) => item.dataset.treeFolder === "新しいフォルダー名");
+          const savedFromPopover =
+            popover.hidden &&
+            form.parentElement === appDocument.querySelector("#folderDialog") &&
+            project?.icon === "builtin:sword" &&
+            project.aliases.includes("別名A") &&
+            project.aliases.includes("別名B") &&
+            saved.series[0].project === "新しいフォルダー名" &&
+            Boolean(renamedRow);
+          const passed = openedContextually && savedFromPopover;
+
+          document.querySelector("#result").textContent = passed
+            ? "PASS folder edits use a contextual non-modal popover and persist changes"
+            : `FAIL opened=${openedContextually} saved=${savedFromPopover} project=${JSON.stringify(project)}`;
+          document.title = passed ? "PASS" : "FAIL";
+          localStorage.removeItem(DATA_KEY);
+          localStorage.removeItem(CONFIG_KEY);
+        }, 100);
+      }, 50);
+    }, 500);
+  }, { once: true });
+  frame.src = "../index.html";
+</script>

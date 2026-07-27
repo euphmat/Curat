@@ -29,19 +29,20 @@ const {
 const { compareFolderNames } = window.CuratFolderOrder;
 const {
   toUpperCamelCase,
-  isValidIconName,
+  isColorIconName,
   iconifySvgUrl,
+  COLOR_ICON_PREFIXES,
 } = window.CuratFolderDisplay;
 
 const BUILTIN_FOLDER_ICONS = [
-  { value: "", icon: "folder", label: "標準", keywords: "folder フォルダー" },
-  { value: "builtin:gamepad", icon: "gamepad", label: "ゲーム", keywords: "game controller ゲーム" },
-  { value: "builtin:sparkles", icon: "sparkles", label: "魔法", keywords: "magic sparkle 魔法" },
-  { value: "builtin:sword", icon: "sword", label: "剣", keywords: "sword battle 剣 戦闘" },
-  { value: "builtin:crown", icon: "crown", label: "王冠", keywords: "crown king 王冠" },
-  { value: "builtin:book", icon: "book", label: "物語", keywords: "book story 本 物語" },
-  { value: "builtin:music", icon: "music", label: "音楽", keywords: "music note 音楽" },
-  { value: "builtin:star", icon: "star", label: "お気に入り", keywords: "star favorite 星 お気に入り" },
+  { value: "", icon: "fluent-emoji-flat:file-folder", label: "標準", keywords: "folder フォルダー" },
+  { value: "builtin:gamepad", icon: "fluent-emoji-flat:video-game", label: "ゲーム", keywords: "game controller ゲーム" },
+  { value: "builtin:sparkles", icon: "fluent-emoji-flat:sparkles", label: "魔法", keywords: "magic sparkle 魔法" },
+  { value: "builtin:sword", icon: "fluent-emoji-flat:crossed-swords", label: "剣", keywords: "sword battle 剣 戦闘" },
+  { value: "builtin:crown", icon: "fluent-emoji-flat:crown", label: "王冠", keywords: "crown king 王冠" },
+  { value: "builtin:book", icon: "fluent-emoji-flat:open-book", label: "物語", keywords: "book story 本 物語" },
+  { value: "builtin:music", icon: "fluent-emoji-flat:musical-notes", label: "音楽", keywords: "music note 音楽" },
+  { value: "builtin:star", icon: "fluent-emoji-flat:star", label: "お気に入り", keywords: "star favorite 星 お気に入り" },
 ];
 const ICON_SEARCH_TRANSLATIONS = new Map([
   ["ゲーム", "game"],
@@ -89,6 +90,8 @@ const elements = {
   projectAliases: $("#projectAliasesInput"),
   projectSearch: $("#projectSearch"),
   folderDialog: $("#folderDialog"),
+  folderForm: $("#folderForm"),
+  folderEditorPopover: $("#folderEditorPopover"),
   folderName: $("#folderNameInput"),
   folderAliases: $("#folderAliasesInput"),
   folderIconSearch: $("#folderIconSearch"),
@@ -125,6 +128,8 @@ let editingFolderOriginalName = null;
 let selectedFolderIcon = "";
 let folderIconSearchTimer = null;
 let folderIconSearchController = null;
+let folderEditorPresentation = "dialog";
+let folderEditorAnchor = null;
 let selectedTreeKey = "";
 let contextTarget = null;
 let confirmResolver = null;
@@ -266,20 +271,15 @@ function builtinFolderIcon(value) {
 
 function normalizeFolderIcon(value) {
   const iconName = String(value || "");
-  if (builtinFolderIcon(iconName) || isValidIconName(iconName)) return iconName;
+  if (builtinFolderIcon(iconName) || isColorIconName(iconName)) return iconName;
   return "";
 }
 
-function folderIconMarkup(value, { preview = false } = {}) {
+function folderIconMarkup(value) {
   const iconName = normalizeFolderIcon(value);
   const builtin = builtinFolderIcon(iconName);
-  if (builtin) return icon(builtin.icon);
-  const url = iconifySvgUrl(iconName);
-  if (!url) return icon("folder");
-  if (preview) {
-    return `<img src="${escapeHtml(`${url}?color=%23d9c9ff`)}" alt="" loading="lazy" />`;
-  }
-  return `<span class="folder-icon-mask" style="--folder-icon-image: url(${escapeHtml(url)})"></span>`;
+  const url = iconifySvgUrl(builtin?.icon || iconName);
+  return `<img class="folder-color-icon" src="${escapeHtml(url)}" alt="" loading="lazy" />`;
 }
 
 function displayFolderName(value) {
@@ -1044,7 +1044,7 @@ function setAllProjectsExpanded(expanded) {
 function updateFolderIconSelection() {
   const builtin = builtinFolderIcon(selectedFolderIcon);
   const label = builtin?.label || selectedFolderIcon || "標準のフォルダー";
-  elements.folderIconCurrent.innerHTML = folderIconMarkup(selectedFolderIcon, { preview: true });
+  elements.folderIconCurrent.innerHTML = folderIconMarkup(selectedFolderIcon);
   elements.folderIconSelection.textContent = builtin
     ? builtin.value
       ? builtin.label
@@ -1057,14 +1057,18 @@ function updateFolderIconSelection() {
   });
 }
 
+function activeFolderEditorContainer() {
+  return folderEditorPresentation === "popover"
+    ? elements.folderEditorPopover
+    : elements.folderDialog;
+}
+
 function renderFolderIconResults(items, status) {
   const uniqueItems = [...new Map(items.map((item) => [item.value, item])).values()];
   elements.folderIconResults.innerHTML = uniqueItems
     .map((item) => {
       const builtin = builtinFolderIcon(item.value);
-      const artwork = builtin
-        ? icon(builtin.icon)
-        : folderIconMarkup(item.value, { preview: true });
+      const artwork = folderIconMarkup(item.value);
       return `
         <button
           class="folder-icon-option"
@@ -1107,18 +1111,19 @@ async function searchFolderIcons(rawQuery) {
   folderIconSearchController?.abort();
   const searchController = new AbortController();
   folderIconSearchController = searchController;
-  $("#folderDialog").classList.add("is-searching-icons");
+  activeFolderEditorContainer().classList.add("is-searching-icons");
   elements.folderIconStatus.textContent = `「${trimmedQuery}」を検索中…`;
 
   try {
     const url = new URL("https://api.iconify.design/search");
     url.searchParams.set("query", translatedQuery);
     url.searchParams.set("limit", "48");
+    url.searchParams.set("prefixes", COLOR_ICON_PREFIXES.join(","));
     const response = await fetch(url, { signal: searchController.signal });
     if (!response.ok) throw new Error(`Icon search failed: ${response.status}`);
     const result = await response.json();
     const remoteItems = (Array.isArray(result.icons) ? result.icons : [])
-      .filter(isValidIconName)
+      .filter(isColorIconName)
       .map((value) => ({
         value,
         label: value.replace(":", " · ").replaceAll("-", " "),
@@ -1138,21 +1143,102 @@ async function searchFolderIcons(rawQuery) {
     );
   } finally {
     if (folderIconSearchController === searchController) {
-      $("#folderDialog").classList.remove("is-searching-icons");
+      activeFolderEditorContainer().classList.remove("is-searching-icons");
     }
   }
 }
 
-function openFolderDialog(projectName = null) {
+function folderRowByName(projectName) {
+  return $$("[data-tree-folder]", elements.projectTree).find(
+    (item) => item.dataset.treeFolder === projectName,
+  );
+}
+
+function positionFolderEditorPopover() {
+  if (elements.folderEditorPopover.hidden) return;
+  const anchor = folderEditorAnchor?.isConnected
+    ? folderEditorAnchor
+    : folderRowByName(editingFolderOriginalName);
+  if (!anchor) return;
+
+  const gap = 14;
+  const edge = 12;
+  const anchorRect = anchor.getBoundingClientRect();
+  const popoverRect = elements.folderEditorPopover.getBoundingClientRect();
+  let left = anchorRect.right + gap;
+  if (left + popoverRect.width > window.innerWidth - edge) {
+    left = anchorRect.left - popoverRect.width - gap;
+  }
+  left = Math.max(edge, Math.min(left, window.innerWidth - popoverRect.width - edge));
+  const top = Math.max(
+    edge,
+    Math.min(anchorRect.top - 28, window.innerHeight - popoverRect.height - edge),
+  );
+  const arrowTop = Math.max(
+    24,
+    Math.min(anchorRect.top + anchorRect.height / 2 - top, popoverRect.height - 24),
+  );
+
+  elements.folderEditorPopover.style.left = `${Math.round(left)}px`;
+  elements.folderEditorPopover.style.top = `${Math.round(top)}px`;
+  elements.folderEditorPopover.style.setProperty("--folder-popover-arrow-top", `${arrowTop}px`);
+  elements.folderEditorPopover.classList.toggle(
+    "opens-to-left",
+    left < anchorRect.left,
+  );
+}
+
+function closeFolderEditor({ restoreFocus = true } = {}) {
+  const wasPopover = folderEditorPresentation === "popover";
+  const anchor = folderEditorAnchor;
+  clearTimeout(folderIconSearchTimer);
+  folderIconSearchController?.abort();
+  folderIconSearchController = null;
+  elements.folderDialog.classList.remove("is-searching-icons");
+  elements.folderEditorPopover.classList.remove("is-searching-icons");
+
+  if (elements.folderDialog.open) elements.folderDialog.close();
+  elements.folderEditorPopover.hidden = true;
+  elements.folderEditorPopover.removeAttribute("style");
+  if (elements.folderForm.parentElement !== elements.folderDialog) {
+    elements.folderDialog.append(elements.folderForm);
+  }
+  folderEditorPresentation = "dialog";
+  folderEditorAnchor = null;
+  editingFolderOriginalName = null;
+
+  if (restoreFocus && wasPopover) {
+    requestAnimationFrame(() => {
+      const nextAnchor = anchor?.isConnected
+        ? anchor
+        : folderRowByName(anchor?.dataset.treeFolder || "");
+      nextAnchor?.focus();
+    });
+  }
+}
+
+function prepareFolderEditor(projectName = null, presentation = "dialog") {
   closeTreeContextMenu();
+  if (
+    !elements.folderEditorPopover.hidden ||
+    elements.folderDialog.open ||
+    elements.folderForm.parentElement !== elements.folderDialog
+  ) {
+    closeFolderEditor({ restoreFocus: false });
+  }
+  folderEditorPresentation = presentation;
   editingFolderOriginalName = projectName;
   const rule = projectName ? projectRuleByName(projectName) : null;
   const seriesCount = projectName
     ? data.series.filter((series) => (series.project || series.title) === projectName).length
     : 0;
+  $("#folderEditorEyebrow").textContent =
+    presentation === "popover" ? "クイック編集" : "ライブラリを整理";
   $("#folderDialogTitle").textContent = projectName ? "フォルダーを編集" : "新しいフォルダー";
   $("#folderDialogLead").textContent = projectName
-    ? "フォルダー名を変更すると、中のプレイリストもまとめて移動します。別名は今後の自動分類に使われます。"
+    ? presentation === "popover"
+      ? "名前・別名・アイコンをその場で調整できます。名前を変えると、中のプレイリストも一緒に移動します。"
+      : "フォルダー名を変更すると、中のプレイリストもまとめて移動します。別名は今後の自動分類に使われます。"
     : "ゲームごとのフォルダーを作り、複数の実況プレイリストをひとまとめにできます。";
   elements.folderName.value = projectName ? displayFolderName(projectName) : "";
   elements.folderAliases.value = (rule?.aliases || []).join("\n");
@@ -1168,8 +1254,29 @@ function openFolderDialog(projectName = null) {
   $("#folderDialogSummary").innerHTML = projectName
     ? `<strong>${seriesCount} 件のプレイリスト</strong>がこのフォルダーに入っています。`
     : "";
+}
+
+function openFolderDialog(projectName = null) {
+  if (projectName) {
+    openFolderEditorPopover(projectName);
+    return;
+  }
+  prepareFolderEditor(null, "dialog");
   elements.folderDialog.showModal();
   requestAnimationFrame(() => elements.folderName.select());
+}
+
+function openFolderEditorPopover(projectName, anchor = null) {
+  const resolvedAnchor = anchor || folderRowByName(projectName);
+  prepareFolderEditor(projectName, "popover");
+  folderEditorAnchor = resolvedAnchor;
+  elements.folderEditorPopover.append(elements.folderForm);
+  elements.folderEditorPopover.hidden = false;
+  positionFolderEditorPopover();
+  requestAnimationFrame(() => {
+    positionFolderEditorPopover();
+    elements.folderName.select();
+  });
 }
 
 function saveFolderFromDialog() {
@@ -1221,8 +1328,12 @@ function saveFolderFromDialog() {
   saveConfig();
   saveData();
   selectedTreeKey = `folder:${name}`;
-  elements.folderDialog.close();
+  const wasPopover = folderEditorPresentation === "popover";
+  closeFolderEditor({ restoreFocus: false });
   render();
+  if (wasPopover) {
+    requestAnimationFrame(() => folderRowByName(name)?.focus());
+  }
   showToast(originalName ? `「${name}」へフォルダー名を変更しました` : `「${name}」を作成しました`);
   return true;
 }
@@ -1281,7 +1392,7 @@ async function deleteFolder(projectName) {
   saveConfig();
   saveData();
   selectedTreeKey = "";
-  if (elements.folderDialog.open) elements.folderDialog.close();
+  closeFolderEditor({ restoreFocus: false });
   render();
   showToast(`「${projectName}」を削除しました`);
 }
@@ -1342,7 +1453,7 @@ function contextMenuItems(kind, id) {
       label: id,
       items: [
         ["new-folder", "folder-plus", "新しいフォルダー…", ""],
-        ["edit-folder", "edit", "名前・別名を編集…", "F2"],
+        ["edit-folder", "edit", "クイック編集", "F2"],
         ["separator"],
         ["expand-folder", "chevrons-down", "フォルダーを展開", ""],
         ["collapse-folder", "chevrons-up", "フォルダーを折りたたむ", ""],
@@ -1397,7 +1508,7 @@ async function runTreeContextAction(action) {
   closeTreeContextMenu();
   if (!target) return;
   if (action === "new-folder") openFolderDialog();
-  if (action === "edit-folder") openFolderDialog(target.id);
+  if (action === "edit-folder") openFolderEditorPopover(target.id);
   if (action === "expand-folder") setProjectExpanded(target.id, true);
   if (action === "collapse-folder") setProjectExpanded(target.id, false);
   if (action === "expand-all") setAllProjectsExpanded(true);
@@ -2225,7 +2336,7 @@ elements.projectTree.addEventListener("keydown", (event) => {
   }
   if (event.key === "F2") {
     event.preventDefault();
-    if (isFolder) openFolderDialog(id);
+    if (isFolder) openFolderEditorPopover(id, current);
     else openProjectDialog(id);
     return;
   }
@@ -2280,7 +2391,7 @@ $("#folderForm").addEventListener("submit", (event) => {
   saveFolderFromDialog();
 });
 $("#folderForm").querySelectorAll(".close-button, .secondary-button").forEach((button) => {
-  button.addEventListener("click", () => elements.folderDialog.close());
+  button.addEventListener("click", () => closeFolderEditor());
 });
 elements.folderName.addEventListener("input", () => {
   $("#folderNameError").textContent = "";
@@ -2317,6 +2428,39 @@ $("#resetFolderIcon").addEventListener("click", () => {
 $("#deleteFolder").addEventListener("click", () => {
   if (editingFolderOriginalName) deleteFolder(editingFolderOriginalName);
 });
+
+elements.folderDialog.addEventListener("close", () => {
+  if (folderEditorPresentation === "dialog") editingFolderOriginalName = null;
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (
+    folderEditorPresentation !== "popover" ||
+    elements.folderEditorPopover.hidden ||
+    elements.confirmDialog.open ||
+    elements.folderEditorPopover.contains(event.target) ||
+    event.target.closest("[data-context-action='edit-folder']")
+  ) {
+    return;
+  }
+  closeFolderEditor({ restoreFocus: false });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (
+    event.key === "Escape" &&
+    folderEditorPresentation === "popover" &&
+    !elements.folderEditorPopover.hidden &&
+    !elements.confirmDialog.open &&
+    !elements.folderIconSearch.value
+  ) {
+    event.preventDefault();
+    closeFolderEditor();
+  }
+});
+
+window.addEventListener("resize", positionFolderEditorPopover);
+elements.sidebar.addEventListener("scroll", positionFolderEditorPopover, true);
 
 elements.contextMenu.addEventListener("click", (event) => {
   const item = event.target.closest("[data-context-action]");

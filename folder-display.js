@@ -5,6 +5,15 @@
     /^(?=[MDCLXVI]+$)M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/i;
   const ASCII_NAME_PATTERN = /^[\x20-\x7E]+$/;
   const ICON_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*:[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const COLOR_ICON_PREFIXES = [
+    "fluent-emoji-flat",
+    "fluent-emoji",
+    "noto",
+    "twemoji",
+    "openmoji",
+    "emojione",
+    "fxemoji",
+  ];
 
   function formatAsciiWord(word) {
     if (/^\d+$/.test(word)) return word;
@@ -25,6 +34,11 @@
     return ICON_NAME_PATTERN.test(String(value || ""));
   }
 
+  function isColorIconName(value) {
+    if (!isValidIconName(value)) return false;
+    return COLOR_ICON_PREFIXES.includes(String(value).split(":")[0]);
+  }
+
   function iconifySvgUrl(value) {
     if (!isValidIconName(value)) return "";
     const [prefix, name] = value.split(":");
@@ -34,6 +48,8 @@
   root.CuratFolderDisplay = {
     toUpperCamelCase,
     isValidIconName,
+    isColorIconName,
     iconifySvgUrl,
+    COLOR_ICON_PREFIXES,
   };
 })(typeof window !== "undefined" ? window : globalThis);

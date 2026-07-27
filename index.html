@@ -341,6 +341,7 @@
       <form method="dialog" class="sheet" id="folderForm">
         <div class="sheet-head">
           <div>
+            <span class="folder-editor-eyebrow" id="folderEditorEyebrow">ライブラリを整理</span>
             <h2 id="folderDialogTitle">新しいフォルダー</h2>
           </div>
           <button class="close-button" value="cancel" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
@@ -376,7 +377,7 @@
             </span>
             <span>
               <strong id="folderIconSelection">標準のフォルダー</strong>
-              <small>内蔵アイコン、またはIconifyのSVGから選べます。</small>
+              <small>カラーアイコン、またはIconifyのカラーSVGから選べます。</small>
             </span>
             <button class="icon-reset-button" id="resetFolderIcon" type="button">標準に戻す</button>
           </div>
@@ -386,7 +387,7 @@
             <input
               id="folderIconSearch"
               type="search"
-              placeholder="game、sword、star などで検索"
+            placeholder="カラーアイコンを検索"
               autocomplete="off"
             />
             <span class="icon-search-spinner" aria-hidden="true"></span>
@@ -408,6 +409,18 @@
         </div>
       </form>
     </dialog>
+
+    <div
+      class="folder-editor-popover"
+      id="folderEditorPopover"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="folderDialogTitle"
+      aria-describedby="folderDialogLead"
+      hidden
+    >
+      <span class="folder-editor-popover-arrow" aria-hidden="true"></span>
+    </div>
 
     <dialog class="confirm-dialog" id="confirmDialog">
       <form method="dialog" class="confirm-card" id="confirmForm">

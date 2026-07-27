@@ -2853,6 +2853,13 @@ body.detail-pinned .detail-sidebar {
   height: 17px;
 }
 
+.folder-icon .folder-color-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(8, 4, 24, 0.24));
+}
+
 .folder-icon .icon {
   fill: none;
   stroke: currentColor;
@@ -5995,4 +6002,235 @@ body.detail-pinned .task-state-button {
 
 .project-group.is-expanded .folder-icon {
   background: linear-gradient(135deg, #e5caff, #80eaff);
+}
+
+/* Contextual folder editor */
+.folder-editor-eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: #8feaff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.folder-editor-popover {
+  --folder-popover-arrow-top: 42px;
+  position: fixed;
+  z-index: 115;
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: visible;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(133, 232, 255, 0.12), transparent 25%),
+    linear-gradient(155deg, rgba(35, 27, 73, 0.99), rgba(16, 13, 39, 0.99));
+  border: 1px solid rgba(190, 173, 255, 0.42);
+  border-radius: 18px;
+  box-shadow:
+    0 28px 70px rgba(3, 2, 18, 0.54),
+    0 0 0 1px rgba(255, 255, 255, 0.025) inset;
+  scrollbar-width: thin;
+  scrollbar-color: #65578b transparent;
+  animation: folder-popover-in 170ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  backdrop-filter: blur(22px);
+}
+
+.folder-editor-popover[hidden] {
+  display: none;
+}
+
+.folder-editor-popover::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  content: "";
+  background: linear-gradient(90deg, #9f8cff, #83eaff 58%, #d4ff8a);
+  border-radius: 18px 18px 0 0;
+  pointer-events: none;
+}
+
+.folder-editor-popover-arrow {
+  position: absolute;
+  left: -7px;
+  top: calc(var(--folder-popover-arrow-top) - 7px);
+  width: 14px;
+  height: 14px;
+  background: #211a48;
+  border-bottom: 1px solid rgba(190, 173, 255, 0.42);
+  border-left: 1px solid rgba(190, 173, 255, 0.42);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.folder-editor-popover.opens-to-left .folder-editor-popover-arrow {
+  right: -7px;
+  left: auto;
+  border: 0;
+  border-top: 1px solid rgba(190, 173, 255, 0.42);
+  border-right: 1px solid rgba(190, 173, 255, 0.42);
+}
+
+.folder-editor-popover .sheet {
+  max-height: calc(100vh - 24px);
+  padding: 20px;
+  overflow: auto;
+  border-radius: inherit;
+  scrollbar-width: thin;
+  scrollbar-color: #65578b transparent;
+}
+
+.folder-editor-popover .sheet-head {
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.folder-editor-popover .sheet-head h2 {
+  font-size: 21px;
+}
+
+.folder-editor-popover .close-button {
+  flex-basis: 34px;
+  height: 34px;
+}
+
+.folder-editor-popover .sheet-lead {
+  margin-bottom: 16px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.folder-editor-popover .field {
+  gap: 6px;
+  margin-bottom: 13px;
+  font-size: 12px;
+}
+
+.folder-editor-popover .plain-input {
+  height: 44px;
+}
+
+.folder-editor-popover .alias-input {
+  min-height: 72px;
+  max-height: 120px;
+}
+
+.folder-editor-popover .folder-icon-picker {
+  margin-bottom: 12px;
+}
+
+.folder-editor-popover .folder-icon-picker > legend {
+  font-size: 12px;
+}
+
+.folder-editor-popover .folder-icon-picker-head {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  min-height: 56px;
+}
+
+.folder-editor-popover .folder-icon-current {
+  width: 40px;
+  height: 40px;
+}
+
+.folder-editor-popover .folder-icon-search {
+  height: 40px;
+}
+
+.folder-editor-popover .folder-icon-results {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  max-height: 150px;
+}
+
+.folder-editor-popover .folder-icon-option {
+  min-height: 54px;
+}
+
+.folder-editor-popover .folder-icon-status {
+  min-height: 15px;
+  margin-top: 4px;
+}
+
+.folder-editor-popover .folder-summary {
+  padding: 9px 11px;
+  font-size: 11px;
+}
+
+.folder-editor-popover .sheet-actions {
+  position: sticky;
+  bottom: -20px;
+  z-index: 2;
+  margin: 14px -20px -20px;
+  padding: 12px 20px 16px;
+  background: linear-gradient(180deg, rgba(18, 14, 43, 0), rgba(18, 14, 43, 0.98) 24%);
+}
+
+.folder-editor-popover .danger-button,
+.folder-editor-popover .primary-button,
+.folder-editor-popover .secondary-button {
+  min-height: 38px;
+  padding-inline: 12px;
+  font-size: 12px;
+}
+
+.folder-editor-popover.is-searching-icons .icon-search-spinner {
+  opacity: 1;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes folder-popover-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@media (max-width: 860px) {
+  .folder-editor-popover {
+    right: 8px !important;
+    bottom: 8px !important;
+    left: 8px !important;
+    top: auto !important;
+    width: auto;
+    max-height: min(82vh, 720px);
+    border-radius: 18px;
+  }
+
+  .folder-editor-popover .sheet {
+    max-height: min(82vh, 720px);
+  }
+
+  .folder-editor-popover-arrow {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .folder-editor-popover .sheet {
+    padding: 16px;
+  }
+
+  .folder-editor-popover .sheet-actions {
+    grid-template-columns: 1fr 1fr;
+    bottom: -16px;
+    margin: 12px -16px -16px;
+    padding: 11px 16px 14px;
+  }
+
+  .folder-editor-popover .sheet-actions > span {
+    display: none;
+  }
+
+  .folder-editor-popover .danger-button {
+    grid-column: 1 / -1;
+  }
+
+  .folder-editor-popover .folder-icon-results {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
 }
