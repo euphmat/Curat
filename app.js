@@ -12,7 +12,11 @@ const {
   classifyProject,
   rememberLearnedAlias,
 } = window.CuratProjectMatch;
-const { normalizePlaylistOrder } = window.CuratPlaylistOrder;
+const {
+  normalizePlaylistOrder,
+  sortSeriesByPlaylistOrder,
+  reorderVisiblePlaylistOrder,
+} = window.CuratPlaylistOrder;
 
 const defaultData = () => ({
   version: APP_VERSION,
@@ -67,6 +71,8 @@ let editingProjectSeriesId = null;
 let editingProjectOriginalName = "";
 let draggedSeriesId = null;
 let activeDropProject = null;
+let activeDropPlaylistRow = null;
+let activePlaylistDropPlacement = "";
 let suppressPlaylistClickUntil = 0;
 let detailReturnFocus = null;
 let editingFolderOriginalName = null;
@@ -416,9 +422,7 @@ function renderProjectTree() {
         <div class="project-playlists" role="group"${expanded ? "" : " hidden"}>
           ${
             matchedSeries.length
-              ? matchedSeries
-            .sort((a, b) => getChannelName(a).localeCompare(getChannelName(b), "ja"))
-            .map(
+              ? sortSeriesByPlaylistOrder(matchedSeries, data.playlistOrder).map(
               (series) => {
                 const stats = getSeriesStats(series);
                 const playlistKey = `playlist:${series.id}`;
@@ -1190,9 +1194,14 @@ function moveSeriesToProject(seriesId, projectName) {
 function clearPlaylistDragState() {
   draggedSeriesId = null;
   activeDropProject = null;
+  activeDropPlaylistRow = null;
+  activePlaylistDropPlacement = "";
   document.body.classList.remove("is-dragging-playlist");
   $$(".is-dragging").forEach((item) => item.classList.remove("is-dragging"));
   $$(".project-group.is-drop-target").forEach((item) => item.classList.remove("is-drop-target"));
+  $$(".project-playlist-row.is-drop-before, .project-playlist-row.is-drop-after").forEach((item) =>
+    item.classList.remove("is-drop-before", "is-drop-after"),
+  );
 }
 
 function setActiveDropProject(group) {
@@ -1200,6 +1209,22 @@ function setActiveDropProject(group) {
   activeDropProject?.classList.remove("is-drop-target");
   activeDropProject = group;
   activeDropProject?.classList.add("is-drop-target");
+}
+
+function setActiveDropPlaylist(row, placement = "") {
+  if (activeDropPlaylistRow === row && activePlaylistDropPlacement === placement) return;
+  activeDropPlaylistRow?.classList.remove("is-drop-before", "is-drop-after");
+  activeDropPlaylistRow = row;
+  activePlaylistDropPlacement = placement;
+  activeDropPlaylistRow?.classList.add(
+    placement === "after" ? "is-drop-after" : "is-drop-before",
+  );
+}
+
+function playlistButtonFromDropTarget(target) {
+  return target
+    .closest(".project-playlist-row")
+    ?.querySelector("[data-project-series]");
 }
 
 function handlePlaylistDragStart(event) {
@@ -1219,12 +1244,31 @@ function handleProjectDragOver(event) {
   const group = event.target.closest("[data-drop-project]");
   if (!group) {
     setActiveDropProject(null);
+    setActiveDropPlaylist(null);
     return;
   }
   const series = data.series.find((item) => item.id === draggedSeriesId);
   const currentProject = (series?.project || series?.title || "").trim();
-  if (!series || currentProject === group.dataset.dropProject) {
+  const targetPlaylist = playlistButtonFromDropTarget(event.target);
+  const canReorder =
+    series &&
+    currentProject === group.dataset.dropProject &&
+    targetPlaylist &&
+    targetPlaylist.dataset.projectSeries !== draggedSeriesId;
+
+  if (canReorder) {
+    const targetRow = targetPlaylist.closest(".project-playlist-row");
+    const rect = targetRow.getBoundingClientRect();
+    const placement = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
     setActiveDropProject(null);
+    setActiveDropPlaylist(targetRow, placement);
+    return;
+  }
+
+  setActiveDropPlaylist(null);
+  if (!series || currentProject === group.dataset.dropProject) {
     event.dataTransfer.dropEffect = "none";
     return;
   }
@@ -1237,11 +1281,40 @@ function handleProjectDrop(event) {
   if (!draggedSeriesId) return;
   const group = event.target.closest("[data-drop-project]");
   if (!group) return;
-  event.preventDefault();
   const seriesId =
     event.dataTransfer.getData("application/x-playlog-series") ||
     event.dataTransfer.getData("text/plain") ||
     draggedSeriesId;
+  const series = data.series.find((item) => item.id === seriesId);
+  const targetPlaylist = playlistButtonFromDropTarget(event.target);
+  const currentProject = (series?.project || series?.title || "").trim();
+  const isReorder =
+    series &&
+    currentProject === group.dataset.dropProject &&
+    targetPlaylist &&
+    targetPlaylist.dataset.projectSeries !== seriesId;
+
+  if (isReorder) {
+    event.preventDefault();
+    const placement = activePlaylistDropPlacement || "before";
+    const visibleIds = $$("[data-project-series]", group).map(
+      (item) => item.dataset.projectSeries,
+    );
+    data.playlistOrder = reorderVisiblePlaylistOrder(
+      normalizePlaylistOrder(data.series, data.playlistOrder),
+      visibleIds,
+      seriesId,
+      targetPlaylist.dataset.projectSeries,
+      placement,
+    );
+    clearPlaylistDragState();
+    saveData();
+    render();
+    showToast("プレイリストの並び順を保存しました");
+    return;
+  }
+
+  event.preventDefault();
   const projectName = group.dataset.dropProject;
   clearPlaylistDragState();
   moveSeriesToProject(seriesId, projectName);

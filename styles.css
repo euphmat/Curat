@@ -569,10 +569,33 @@ body.is-dragging-playlist .project-row {
 }
 
 .project-playlist-row {
+  position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
   border-radius: 5px;
+}
+
+.project-playlist-row.is-drop-before::before,
+.project-playlist-row.is-drop-after::after {
+  position: absolute;
+  z-index: 3;
+  right: 4px;
+  left: 4px;
+  height: 3px;
+  content: "";
+  background: var(--sky);
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(119, 233, 255, 0.8);
+  pointer-events: none;
+}
+
+.project-playlist-row.is-drop-before::before {
+  top: -2px;
+}
+
+.project-playlist-row.is-drop-after::after {
+  bottom: -2px;
 }
 
 .project-playlist-row.is-selected {
