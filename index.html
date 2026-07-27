@@ -213,28 +213,45 @@
       <form method="dialog" class="sheet" id="settingsForm">
         <div class="sheet-head">
           <div>
-            <h2>YouTube API 設定</h2>
+            <h2>設定</h2>
           </div>
           <button class="close-button" value="cancel" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
         </div>
-        <p class="sheet-lead">
-          静的サイトからプレイリストを取得するため、YouTube Data API v3 の API キーをこの端末に保存します。
-        </p>
-        <label class="field">
-          <span>API キー</span>
-          <div class="secret-field">
-            <input id="apiKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
-            <button id="toggleKey" type="button" aria-label="API キーを表示"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg><span>表示</span></button>
-          </div>
-          <small>キーはバックアップには含まれず、このブラウザ内だけに保存されます。</small>
-        </label>
-        <div class="info-box">
-          <strong>安全に使うための設定</strong>
-          <p>
-            Google Cloud Console で YouTube Data API v3 を有効化し、キーの「ウェブサイトの制限」に公開予定の
-            GitHub Pages URL を登録してください。
+
+        <div class="settings-section">
+          <h3>YouTube API 設定</h3>
+          <p class="sheet-lead">
+            静的サイトからプレイリストを取得するため、YouTube Data API v3 の API キーをこの端末に保存します。
           </p>
+          <label class="field">
+            <span>API キー</span>
+            <div class="secret-field">
+              <input id="apiKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
+              <button id="toggleKey" type="button" aria-label="API キーを表示"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg><span>表示</span></button>
+            </div>
+            <small>キーはバックアップには含まれず、このブラウザ内だけに保存されます。</small>
+          </label>
+          <div class="info-box">
+            <strong>安全に使うための設定</strong>
+            <p>
+              Google Cloud Console で YouTube Data API v3 を有効化し、キーの「ウェブサイトの制限」に公開予定の
+              GitHub Pages URL を登録してください。
+            </p>
+          </div>
         </div>
+
+        <div class="settings-section">
+          <h3>プリセットデータの読み込み</h3>
+          <p class="sheet-lead">
+            同梱のデータファイル (data.json) を読み込んで、プレイリストと視聴進捗を復元できます。
+          </p>
+          <div class="settings-data-actions">
+            <button class="secondary-button" id="loadDataJson" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg>data.json を読み込む
+            </button>
+          </div>
+        </div>
+
         <div class="sheet-actions">
           <a
             class="secondary-button"

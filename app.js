@@ -2173,6 +2173,33 @@ async function restoreBackup(file) {
   }
 }
 
+async function loadDataJson() {
+  try {
+    const response = await fetch("data.json");
+    if (!response.ok) {
+      throw new Error(`data.json の取得に失敗しました (HTTP ${response.status})`);
+    }
+    const payload = await response.json();
+    if (!isValidBackup(payload)) throw new Error("Curat のバックアップファイルではありません。");
+    const count = payload.data?.series?.length || 0;
+    if (
+      data.series.length &&
+      !window.confirm(`現在のデータを置き換え、data.json から ${count} 件のプレイリストを読み込みますか？`)
+    ) {
+      return;
+    }
+    data = migrateData(payload.data);
+    saveData();
+    render();
+    showToast(`data.json から ${count} 件のプレイリストを読み込みました`);
+    if (elements.settingsDialog?.open) {
+      elements.settingsDialog.close();
+    }
+  } catch (error) {
+    showToast(error.message || "data.json を読み込めませんでした", true);
+  }
+}
+
 function updateBackupUI(justSaved = false) {
   if (saveFileHandle) {
     elements.backupStatus.textContent = justSaved ? "ファイルへ同期済み" : "保存ファイル接続中";
@@ -2317,6 +2344,7 @@ $("#settingsForm").addEventListener("submit", async (event) => {
 $(".close-button", elements.settingsDialog).addEventListener("click", () =>
   elements.settingsDialog.close(),
 );
+$("#loadDataJson")?.addEventListener("click", loadDataJson);
 
 $("#openBackup").addEventListener("click", () => {
   updateBackupUI();
