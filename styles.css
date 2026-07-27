@@ -153,18 +153,6 @@ a:focus-visible {
 .brand-mark span:nth-child(2) { height: 16px; }
 .brand-mark span:nth-child(3) { height: 12px; }
 
-.main-nav {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #26302d;
-}
-
-.main-nav .nav-item {
-  position: relative;
-}
-
 .nav-item {
   display: grid;
   grid-template-rows: 24px auto;
@@ -185,14 +173,9 @@ a:focus-visible {
   cursor: pointer;
 }
 
-.nav-item:hover,
-.nav-item.is-active {
+.nav-item:hover {
   color: #fff;
   background: #283633;
-}
-
-.nav-item.is-active {
-  box-shadow: inset 0 -2px var(--orange);
 }
 
 .nav-icon {
@@ -201,19 +184,6 @@ a:focus-visible {
   width: 28px;
   height: 28px;
   font-size: 18px;
-}
-
-.nav-count {
-  position: absolute;
-  transform: translate(16px, -13px);
-  min-width: 23px;
-  padding: 3px 6px;
-  color: #111714;
-  font-size: 12px;
-  font-weight: 900;
-  text-align: center;
-  background: var(--lime);
-  border-radius: 99px;
 }
 
 .backup-card {
@@ -2854,30 +2824,14 @@ body::after {
   transform: rotate(-50deg);
 }
 
-.main-nav {
-  border-bottom-color: rgba(177, 157, 255, 0.15);
-}
-
 .nav-item {
   color: #aaa2c3;
 }
 
-.nav-item:hover,
-.nav-item.is-active {
+.nav-item:hover {
   color: #fff;
   background:
     linear-gradient(135deg, rgba(126, 91, 211, 0.3), rgba(72, 208, 232, 0.1));
-}
-
-.nav-item.is-active {
-  box-shadow:
-    inset 0 -2px var(--orange),
-    0 0 22px rgba(173, 111, 255, 0.12);
-}
-
-.nav-count {
-  background: linear-gradient(135deg, #e9fbff, var(--lime));
-  box-shadow: 0 0 14px rgba(119, 233, 255, 0.35);
 }
 
 .project-nav {

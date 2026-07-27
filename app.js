@@ -37,7 +37,6 @@ const elements = {
   todoStat: $("#todoStat"),
   progressStat: $("#progressStat"),
   progressBar: $("#progressBar"),
-  queueCount: $("#queueCount"),
   search: $("#searchInput"),
   syncAll: $("#syncAll"),
   deleteAll: $("#deleteAll"),
@@ -67,7 +66,6 @@ const elements = {
 
 let data = loadData();
 let config = loadConfig();
-let currentView = "library";
 let activeFilter = "all";
 let detailSeriesId = null;
 let saveFileHandle = null;
@@ -317,8 +315,6 @@ function getGlobalStats() {
 
 function seriesMatchesView(series) {
   const stats = getSeriesStats(series);
-  if (currentView === "queue") return stats.doing > 0;
-  if (currentView === "completed") return stats.total > 0 && stats.progress === 100;
   if (activeFilter === "active") return stats.doing > 0 || (stats.done > 0 && stats.progress < 100);
   if (activeFilter === "unstarted") return stats.done === 0 && stats.doing === 0;
   if (activeFilter === "done") return stats.total > 0 && stats.progress === 100;
@@ -342,7 +338,6 @@ function render() {
   elements.todoStat.textContent = global.todo;
   elements.progressStat.textContent = `${global.progress}%`;
   elements.progressBar.style.width = `${global.progress}%`;
-  if (elements.queueCount) elements.queueCount.textContent = global.doing;
   elements.deleteAll.disabled = data.series.length === 0 && data.projects.length === 0;
 
   const seriesList = filteredSeries();
@@ -543,25 +538,6 @@ function createSeriesCard(series) {
   const label = $(".continue-label", card);
   label.textContent = stats.progress === 100 ? "もう一度見る" : stats.doing ? "続きを見る" : "視聴をはじめる";
   return card;
-}
-
-function setView(view) {
-  currentView = view;
-  activeFilter = view === "library" ? activeFilter : "all";
-  $$(".nav-item[data-nav]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.nav === view);
-  });
-  const headings = {
-    library: ["実況ライブラリ", "実況プレイリスト"],
-    queue: ["次に見る", "視聴中のプレイリスト"],
-    completed: ["視聴完了", "全動画を視聴済みのプレイリスト"],
-  };
-  const [title, sectionTitle] = headings[view];
-  $("#viewTitle").textContent = title;
-  $("#sectionTitle").textContent = sectionTitle;
-  document.body.classList.remove("sidebar-open");
-  updateSidebarControls();
-  render();
 }
 
 async function fetchJson(path, params) {
@@ -1643,10 +1619,6 @@ elements.detailContent.addEventListener("click", async (event) => {
   }
 });
 
-$$("[data-nav]").forEach((button) => {
-  button.addEventListener("click", () => setView(button.dataset.nav));
-});
-
 $$("[data-filter]").forEach((button) => {
   button.addEventListener("click", () => {
     activeFilter = button.dataset.filter;
@@ -1664,7 +1636,7 @@ $("#emptyAdd").addEventListener("click", (event) => {
     elements.search.value = "";
     activeFilter = "all";
     $$("[data-filter]").forEach((item) => item.classList.toggle("is-active", item.dataset.filter === "all"));
-    setView("library");
+    render();
   } else {
     elements.url.focus();
     window.scrollTo({ top: 0, behavior: "smooth" });
