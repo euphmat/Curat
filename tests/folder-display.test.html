@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<script src="../folder-display.js"></script>
+<script>
+  const { toUpperCamelCase, isValidIconName, iconifySvgUrl } = window.CuratFolderDisplay;
+  const checks = [
+    ["英字の複数単語をUpperCamelCaseにする", toUpperCamelCase("FINAL FANTASY VII") === "FinalFantasyVII"],
+    ["既存のCamelCaseを維持する", toUpperCamelCase("EvaliceSaga") === "EvaliceSaga"],
+    ["数字を含む名前を整える", toUpperCamelCase("danganronpa 2") === "Danganronpa2"],
+    ["日本語名を変更しない", toUpperCamelCase("ゼルダの伝説") === "ゼルダの伝説"],
+    ["Iconify名を検証できる", isValidIconName("lucide:gamepad-2")],
+    ["不正なアイコン名を拒否する", !isValidIconName("x:url('bad')")],
+    [
+      "Iconify SVG URLを生成できる",
+      iconifySvgUrl("lucide:gamepad-2") === "https://api.iconify.design/lucide/gamepad-2.svg",
+    ],
+  ];
+  const failures = checks.filter(([, passed]) => !passed).map(([name]) => name);
+  document.querySelector("#result").textContent = failures.length
+    ? `FAIL ${failures.join(", ")}`
+    : `PASS ${checks.length}/${checks.length}`;
+  document.title = failures.length ? "FAIL" : "PASS";
+</script>

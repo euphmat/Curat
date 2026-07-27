@@ -2730,6 +2730,433 @@ body.detail-pinned .detail-sidebar {
   }
 }
 
+/* Refined explorer sidebar and interactive folder icon picker */
+.sidebar {
+  padding: 20px 13px 14px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(119, 233, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(34, 27, 70, 0.985), rgba(18, 15, 43, 0.995));
+}
+
+.brand {
+  margin: 2px 10px 20px;
+}
+
+.project-nav {
+  margin: 0 0 10px;
+  padding: 9px 7px 7px;
+  background: linear-gradient(180deg, rgba(32, 25, 69, 0.66), rgba(20, 17, 47, 0.38));
+  border: 1px solid rgba(190, 173, 255, 0.13);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.035),
+    0 18px 45px rgba(4, 2, 20, 0.14);
+}
+
+.explorer-head {
+  padding: 2px 3px 10px;
+}
+
+.explorer-title-icon {
+  flex-basis: 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.explorer-head strong {
+  font-size: 15px;
+}
+
+.explorer-head small {
+  font-size: 11px;
+}
+
+.explorer-actions button {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.explorer-search {
+  height: 46px;
+  margin: 0 1px 9px;
+  padding-inline: 13px 9px;
+  border-radius: 12px;
+}
+
+.project-nav-head {
+  min-height: 32px;
+  margin: 0 1px 4px;
+  padding-inline: 10px;
+  background: rgba(13, 10, 34, 0.44);
+  border: 0;
+  border-radius: 9px;
+  letter-spacing: 0.02em;
+}
+
+.project-tree {
+  padding: 3px 1px 10px;
+}
+
+.project-group {
+  margin-bottom: 2px;
+}
+
+.project-row {
+  grid-template-columns: 22px 30px minmax(0, 1fr) auto auto 30px;
+  gap: 7px;
+  min-height: 50px;
+  padding: 3px 4px 3px 2px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.project-row:hover {
+  border-color: rgba(197, 176, 255, 0.16);
+  transform: translateX(2px);
+}
+
+.project-row.is-selected {
+  background: linear-gradient(100deg, rgba(145, 105, 226, 0.26), rgba(71, 192, 221, 0.08));
+  border-color: rgba(191, 171, 248, 0.28);
+  box-shadow:
+    inset 3px 0 #8feaff,
+    0 8px 22px rgba(5, 3, 24, 0.13);
+}
+
+.folder-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #b8acd7;
+  background: rgba(124, 101, 177, 0.16);
+  border: 1px solid rgba(190, 170, 246, 0.14);
+  border-radius: 9px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.folder-icon::before {
+  display: none;
+}
+
+.folder-icon .icon,
+.folder-icon-mask {
+  width: 17px;
+  height: 17px;
+}
+
+.folder-icon .icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.folder-icon-mask {
+  display: block;
+  background: currentColor;
+  -webkit-mask: var(--folder-icon-image) center / contain no-repeat;
+  mask: var(--folder-icon-image) center / contain no-repeat;
+}
+
+.project-group.is-expanded .folder-icon {
+  color: #21183b;
+  background: linear-gradient(135deg, #e5caff, #80eaff);
+  border-color: rgba(255, 255, 255, 0.52);
+  box-shadow:
+    0 0 0 3px rgba(134, 220, 255, 0.06),
+    0 6px 16px rgba(46, 182, 219, 0.16);
+}
+
+.project-name {
+  color: #d7d2e1;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+.project-row:hover .project-name,
+.project-row.is-selected .project-name {
+  color: #fff;
+}
+
+.project-progress,
+.project-item-count {
+  min-width: 0;
+  padding: 2px 6px;
+  font-size: 10px;
+  line-height: 1.45;
+  border-radius: 999px;
+}
+
+.project-progress {
+  color: #b7adc9;
+  background: rgba(118, 95, 164, 0.12);
+}
+
+.project-item-count {
+  min-width: 22px;
+  color: #d5cced;
+  text-align: center;
+  background: rgba(165, 135, 226, 0.15);
+}
+
+.project-playlists {
+  margin-left: 37px;
+  padding-left: 12px;
+}
+
+.project-playlist-row {
+  border-radius: 9px;
+}
+
+.project-playlist {
+  min-height: 40px;
+  border-radius: 9px;
+}
+
+.sidebar-footer {
+  padding-top: 9px;
+}
+
+.folder-dialog {
+  width: min(680px, calc(100% - 28px));
+}
+
+.folder-icon-picker {
+  min-width: 0;
+  margin: 4px 0 18px;
+  padding: 0;
+  border: 0;
+}
+
+.folder-icon-picker > legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.folder-icon-picker-head {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 66px;
+  padding: 9px 11px;
+  background: rgba(116, 89, 175, 0.1);
+  border: 1px solid rgba(190, 173, 255, 0.2);
+  border-radius: 13px;
+}
+
+.folder-icon-current {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  color: #261c42;
+  background: linear-gradient(135deg, #ead8ff, #87ebfa);
+  border: 1px solid rgba(255, 255, 255, 0.64);
+  border-radius: 13px;
+  box-shadow: 0 7px 20px rgba(66, 207, 235, 0.13);
+}
+
+.folder-icon-current .icon,
+.folder-icon-current img {
+  width: 24px;
+  height: 24px;
+}
+
+.folder-icon-current .icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.folder-icon-picker-head strong,
+.folder-icon-picker-head small {
+  display: block;
+}
+
+.folder-icon-picker-head strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-icon-picker-head small {
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.icon-reset-button {
+  min-height: 34px;
+  padding: 0 10px;
+  color: #cfc5e4;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(82, 66, 119, 0.2);
+  border: 1px solid rgba(190, 173, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.icon-reset-button:hover {
+  color: #fff;
+  border-color: rgba(211, 195, 255, 0.48);
+}
+
+.folder-icon-search {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  margin-top: 10px;
+  padding: 0 11px;
+  color: #a99fc0;
+  background: rgba(20, 16, 48, 0.76);
+  border: 1px solid rgba(174, 151, 244, 0.3);
+  border-radius: 11px;
+}
+
+.folder-icon-search:focus-within {
+  border-color: var(--sky);
+  box-shadow: 0 0 0 3px rgba(159, 140, 255, 0.13);
+}
+
+.folder-icon-search input {
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.icon-search-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(213, 199, 255, 0.2);
+  border-top-color: #8feaff;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.folder-dialog.is-searching-icons .icon-search-spinner {
+  opacity: 1;
+  animation: spin 0.7s linear infinite;
+}
+
+.folder-icon-results {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 210px;
+  margin-top: 9px;
+  padding: 2px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #65578b transparent;
+}
+
+.folder-icon-option {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 7px 3px 5px;
+  color: #c9bedf;
+  background: rgba(94, 72, 139, 0.1);
+  border: 1px solid rgba(190, 173, 255, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.folder-icon-option:hover {
+  color: #fff;
+  background: rgba(136, 102, 211, 0.22);
+  border-color: rgba(202, 181, 255, 0.32);
+}
+
+.folder-icon-option.is-selected {
+  color: #fff;
+  background: linear-gradient(145deg, rgba(151, 108, 229, 0.42), rgba(71, 195, 220, 0.19));
+  border-color: #91eaff;
+  box-shadow: 0 0 0 2px rgba(119, 233, 255, 0.08);
+}
+
+.folder-icon-option > span {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+}
+
+.folder-icon-option .icon,
+.folder-icon-option img {
+  width: 23px;
+  height: 23px;
+}
+
+.folder-icon-option .icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.folder-icon-option small {
+  width: 100%;
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-icon-status {
+  display: block;
+  min-height: 18px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.folder-dialog .danger-button[hidden] {
+  display: none !important;
+}
+
+.tree-chevron,
+.project-group.is-expanded .tree-chevron {
+  transform: none;
+}
+
+@media (max-width: 580px) {
+  .folder-icon-picker-head {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .icon-reset-button {
+    grid-column: 1 / -1;
+  }
+
+  .folder-icon-results {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
 /* Curat jewel theme */
 :root {
   --ink: #0b1b32;
@@ -5555,4 +5982,17 @@ body.detail-pinned .task-state-button {
     border-top: 1px solid rgba(190, 173, 255, 0.16);
     border-left: 0;
   }
+}
+
+/* Keep the refined explorer states above the legacy jewel-theme overrides. */
+.project-row.is-selected {
+  background: linear-gradient(100deg, rgba(145, 105, 226, 0.26), rgba(71, 192, 221, 0.08));
+}
+
+.folder-icon {
+  background: rgba(124, 101, 177, 0.16);
+}
+
+.project-group.is-expanded .folder-icon {
+  background: linear-gradient(135deg, #e5caff, #80eaff);
 }

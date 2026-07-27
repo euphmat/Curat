@@ -27,6 +27,34 @@ const {
   reorderVisiblePlaylistOrder,
 } = window.CuratPlaylistOrder;
 const { compareFolderNames } = window.CuratFolderOrder;
+const {
+  toUpperCamelCase,
+  isValidIconName,
+  iconifySvgUrl,
+} = window.CuratFolderDisplay;
+
+const BUILTIN_FOLDER_ICONS = [
+  { value: "", icon: "folder", label: "標準", keywords: "folder フォルダー" },
+  { value: "builtin:gamepad", icon: "gamepad", label: "ゲーム", keywords: "game controller ゲーム" },
+  { value: "builtin:sparkles", icon: "sparkles", label: "魔法", keywords: "magic sparkle 魔法" },
+  { value: "builtin:sword", icon: "sword", label: "剣", keywords: "sword battle 剣 戦闘" },
+  { value: "builtin:crown", icon: "crown", label: "王冠", keywords: "crown king 王冠" },
+  { value: "builtin:book", icon: "book", label: "物語", keywords: "book story 本 物語" },
+  { value: "builtin:music", icon: "music", label: "音楽", keywords: "music note 音楽" },
+  { value: "builtin:star", icon: "star", label: "お気に入り", keywords: "star favorite 星 お気に入り" },
+];
+const ICON_SEARCH_TRANSLATIONS = new Map([
+  ["ゲーム", "game"],
+  ["剣", "sword"],
+  ["魔法", "magic"],
+  ["星", "star"],
+  ["音楽", "music"],
+  ["本", "book"],
+  ["王冠", "crown"],
+  ["冒険", "adventure"],
+  ["宇宙", "space"],
+  ["車", "car"],
+]);
 
 const defaultData = () => ({
   version: APP_VERSION,
@@ -63,6 +91,11 @@ const elements = {
   folderDialog: $("#folderDialog"),
   folderName: $("#folderNameInput"),
   folderAliases: $("#folderAliasesInput"),
+  folderIconSearch: $("#folderIconSearch"),
+  folderIconResults: $("#folderIconResults"),
+  folderIconStatus: $("#folderIconStatus"),
+  folderIconCurrent: $("#folderIconCurrent"),
+  folderIconSelection: $("#folderIconSelection"),
   contextMenu: $("#treeContextMenu"),
   confirmDialog: $("#confirmDialog"),
   sidebar: $("#sidebar"),
@@ -89,6 +122,9 @@ let activeDropTaskRow = null;
 let activeTaskDropPlacement = "";
 let detailReturnFocus = null;
 let editingFolderOriginalName = null;
+let selectedFolderIcon = "";
+let folderIconSearchTimer = null;
+let folderIconSearchController = null;
 let selectedTreeKey = "";
 let contextTarget = null;
 let confirmResolver = null;
@@ -148,7 +184,7 @@ function migrateData(saved) {
   for (const series of migratedSeries) {
     if (!projectNames.has(series.project)) {
       projectNames.add(series.project);
-      derivedProjects.push({ name: series.project, aliases: [], learnedAliases: [] });
+      derivedProjects.push({ name: series.project, aliases: [], learnedAliases: [], icon: "" });
     }
   }
   return {
@@ -162,6 +198,7 @@ function migrateData(saved) {
         name: project.name,
         aliases: Array.isArray(project.aliases) ? project.aliases : [],
         learnedAliases: Array.isArray(project.learnedAliases) ? project.learnedAliases : [],
+        icon: normalizeFolderIcon(project.icon),
       })),
       ...derivedProjects,
     ],
@@ -221,6 +258,32 @@ function isValidBackup(payload) {
 
 function normalizeText(value = "") {
   return value.toLocaleLowerCase("ja").normalize("NFKC");
+}
+
+function builtinFolderIcon(value) {
+  return BUILTIN_FOLDER_ICONS.find((item) => item.value === value);
+}
+
+function normalizeFolderIcon(value) {
+  const iconName = String(value || "");
+  if (builtinFolderIcon(iconName) || isValidIconName(iconName)) return iconName;
+  return "";
+}
+
+function folderIconMarkup(value, { preview = false } = {}) {
+  const iconName = normalizeFolderIcon(value);
+  const builtin = builtinFolderIcon(iconName);
+  if (builtin) return icon(builtin.icon);
+  const url = iconifySvgUrl(iconName);
+  if (!url) return icon("folder");
+  if (preview) {
+    return `<img src="${escapeHtml(`${url}?color=%23d9c9ff`)}" alt="" loading="lazy" />`;
+  }
+  return `<span class="folder-icon-mask" style="--folder-icon-image: url(${escapeHtml(url)})"></span>`;
+}
+
+function displayFolderName(value) {
+  return toUpperCamelCase(value);
 }
 
 function getChannelName(series) {
@@ -421,6 +484,7 @@ function renderProjectTree() {
     .map(([project, seriesList]) => {
       const rule = projectRuleByName(project);
       const aliases = rule?.aliases || [];
+      const displayName = displayFolderName(project);
       const matchTerms = projectMatchTerms(project);
       const matchedSeries = query
         ? seriesList.filter(
@@ -453,13 +517,13 @@ function renderProjectTree() {
           tabindex="${selectedTreeKey === folderKey || (!selectedTreeKey && visibleGroups[0][0] === project) ? "0" : "-1"}"
           aria-expanded="${expanded}"
           data-tree-folder="${escapeHtml(project)}"
-          title="${escapeHtml(aliases.length ? `${project} / ${aliases.join(" / ")}` : project)}"
+          title="${escapeHtml(aliases.length ? `${displayName} / ${aliases.join(" / ")}` : displayName)}"
         >
           <button class="tree-chevron" type="button" data-tree-toggle="${escapeHtml(project)}" tabindex="-1" aria-label="${
             expanded ? "折りたたむ" : "展開する"
           }">${icon("chevron-down")}</button>
-          <span class="folder-icon" aria-hidden="true"></span>
-          <span class="project-name">${escapeHtml(project)}</span>
+          <span class="folder-icon" aria-hidden="true">${folderIconMarkup(rule?.icon)}</span>
+          <span class="project-name">${escapeHtml(displayName)}</span>
           <span class="project-progress" title="${totals.done}/${totals.total} 本を視聴済み">${
             totals.total ? `${progress}%` : "—"
           }</span>
@@ -470,7 +534,7 @@ function renderProjectTree() {
             data-context-kind="folder"
             data-context-id="${escapeHtml(project)}"
             tabindex="-1"
-            aria-label="「${escapeHtml(project)}」の操作"
+            aria-label="「${escapeHtml(displayName)}」の操作"
           >${icon("more")}</button>
         </div>
         <div class="project-playlists" role="group"${expanded ? "" : " hidden"}>
@@ -936,6 +1000,23 @@ function findEquivalentProjectName(name, excluding = "") {
   );
 }
 
+function removeProjectIfEmpty(projectName) {
+  const name = String(projectName || "").trim();
+  if (
+    !name ||
+    data.series.some(
+      (series) => (series.project || series.title || "名称未設定").trim() === name,
+    )
+  ) {
+    return false;
+  }
+
+  data.projects = data.projects.filter((project) => project.name !== name);
+  if (config.expandedProjects) delete config.expandedProjects[name];
+  if (selectedTreeKey === `folder:${name}`) selectedTreeKey = "";
+  return true;
+}
+
 function setProjectExpanded(projectName, expanded, { focus = true } = {}) {
   config.expandedProjects ||= {};
   config.expandedProjects[projectName] = expanded;
@@ -960,6 +1041,108 @@ function setAllProjectsExpanded(expanded) {
   showToast(expanded ? "すべてのフォルダーを展開しました" : "すべてのフォルダーを折りたたみました");
 }
 
+function updateFolderIconSelection() {
+  const builtin = builtinFolderIcon(selectedFolderIcon);
+  const label = builtin?.label || selectedFolderIcon || "標準のフォルダー";
+  elements.folderIconCurrent.innerHTML = folderIconMarkup(selectedFolderIcon, { preview: true });
+  elements.folderIconSelection.textContent = builtin
+    ? builtin.value
+      ? builtin.label
+      : "標準のフォルダー"
+    : label;
+  $$("[data-folder-icon]", elements.folderIconResults).forEach((button) => {
+    const selected = button.dataset.folderIcon === selectedFolderIcon;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-selected", String(selected));
+  });
+}
+
+function renderFolderIconResults(items, status) {
+  const uniqueItems = [...new Map(items.map((item) => [item.value, item])).values()];
+  elements.folderIconResults.innerHTML = uniqueItems
+    .map((item) => {
+      const builtin = builtinFolderIcon(item.value);
+      const artwork = builtin
+        ? icon(builtin.icon)
+        : folderIconMarkup(item.value, { preview: true });
+      return `
+        <button
+          class="folder-icon-option"
+          type="button"
+          role="option"
+          data-folder-icon="${escapeHtml(item.value)}"
+          aria-selected="${item.value === selectedFolderIcon}"
+          title="${escapeHtml(item.label)}"
+        >
+          <span aria-hidden="true">${artwork}</span>
+          <small>${escapeHtml(item.label)}</small>
+        </button>
+      `;
+    })
+    .join("");
+  elements.folderIconStatus.textContent = status;
+  updateFolderIconSelection();
+}
+
+function showBuiltinFolderIcons() {
+  renderFolderIconResults(
+    BUILTIN_FOLDER_ICONS,
+    "まずは内蔵アイコンから選べます。検索すると、さらに多くのSVGが見つかります。",
+  );
+}
+
+async function searchFolderIcons(rawQuery) {
+  const trimmedQuery = rawQuery.trim();
+  if (!trimmedQuery) {
+    folderIconSearchController?.abort();
+    showBuiltinFolderIcons();
+    return;
+  }
+
+  const translatedQuery = ICON_SEARCH_TRANSLATIONS.get(trimmedQuery) || trimmedQuery;
+  const localQuery = normalizeText(trimmedQuery);
+  const localMatches = BUILTIN_FOLDER_ICONS.filter((item) =>
+    normalizeText(`${item.label} ${item.keywords}`).includes(localQuery),
+  );
+  folderIconSearchController?.abort();
+  const searchController = new AbortController();
+  folderIconSearchController = searchController;
+  $("#folderDialog").classList.add("is-searching-icons");
+  elements.folderIconStatus.textContent = `「${trimmedQuery}」を検索中…`;
+
+  try {
+    const url = new URL("https://api.iconify.design/search");
+    url.searchParams.set("query", translatedQuery);
+    url.searchParams.set("limit", "48");
+    const response = await fetch(url, { signal: searchController.signal });
+    if (!response.ok) throw new Error(`Icon search failed: ${response.status}`);
+    const result = await response.json();
+    const remoteItems = (Array.isArray(result.icons) ? result.icons : [])
+      .filter(isValidIconName)
+      .map((value) => ({
+        value,
+        label: value.replace(":", " · ").replaceAll("-", " "),
+      }));
+    const items = [...localMatches, ...remoteItems];
+    renderFolderIconResults(
+      items,
+      items.length
+        ? `${result.total || remoteItems.length}件から上位${remoteItems.length}件を表示しています。`
+        : `「${trimmedQuery}」に一致するアイコンはありませんでした。`,
+    );
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    renderFolderIconResults(
+      localMatches.length ? localMatches : BUILTIN_FOLDER_ICONS,
+      "オンライン検索に接続できません。内蔵アイコンはそのまま選べます。",
+    );
+  } finally {
+    if (folderIconSearchController === searchController) {
+      $("#folderDialog").classList.remove("is-searching-icons");
+    }
+  }
+}
+
 function openFolderDialog(projectName = null) {
   closeTreeContextMenu();
   editingFolderOriginalName = projectName;
@@ -971,8 +1154,11 @@ function openFolderDialog(projectName = null) {
   $("#folderDialogLead").textContent = projectName
     ? "フォルダー名を変更すると、中のプレイリストもまとめて移動します。別名は今後の自動分類に使われます。"
     : "ゲームごとのフォルダーを作り、複数の実況プレイリストをひとまとめにできます。";
-  elements.folderName.value = projectName || "";
+  elements.folderName.value = projectName ? displayFolderName(projectName) : "";
   elements.folderAliases.value = (rule?.aliases || []).join("\n");
+  selectedFolderIcon = normalizeFolderIcon(rule?.icon);
+  elements.folderIconSearch.value = "";
+  showBuiltinFolderIcons();
   $("#folderNameError").textContent = "";
   $("#saveFolder").innerHTML = `${icon(projectName ? "save" : "folder-plus")}<span>${
     projectName ? "変更を保存" : "フォルダーを作成"
@@ -987,7 +1173,8 @@ function openFolderDialog(projectName = null) {
 }
 
 function saveFolderFromDialog() {
-  const name = elements.folderName.value.trim();
+  const enteredName = elements.folderName.value.trim();
+  const name = displayFolderName(enteredName);
   const originalName = editingFolderOriginalName;
   const duplicate = findEquivalentProjectName(name, originalName || "");
   if (!name) {
@@ -1004,9 +1191,10 @@ function saveFolderFromDialog() {
   let aliases = parseAliases(elements.folderAliases.value).filter(
     (alias) => normalizeProjectMatch(alias) !== normalizeProjectMatch(name),
   );
+  if (enteredName !== name) aliases = [...new Set([...aliases, enteredName])];
 
   if (!originalName) {
-    data.projects.push({ name, aliases, learnedAliases: [] });
+    data.projects.push({ name, aliases, learnedAliases: [], icon: selectedFolderIcon });
     config.expandedProjects ||= {};
     config.expandedProjects[name] = true;
   } else {
@@ -1024,7 +1212,7 @@ function saveFolderFromDialog() {
     }
     const learnedAliases = [...(oldRule?.learnedAliases || [])];
     data.projects = data.projects.filter((project) => project.name !== originalName);
-    data.projects.push({ name, aliases, learnedAliases });
+    data.projects.push({ name, aliases, learnedAliases, icon: selectedFolderIcon });
     config.expandedProjects ||= {};
     config.expandedProjects[name] = config.expandedProjects[originalName] !== false;
     if (originalName !== name) delete config.expandedProjects[originalName];
@@ -1248,6 +1436,7 @@ function moveSeriesToProject(seriesId, projectName) {
   series.project = targetName;
   const aliasAdded = learnRecentImportCorrection(series, targetName);
   if (!aliasAdded) learnPlaylistTitle(targetName, series.title);
+  const removedEmptyFolder = removeProjectIfEmpty(oldName);
   series.updatedAt = new Date().toISOString();
   config.expandedProjects ||= {};
   config.expandedProjects[targetName] = true;
@@ -1255,10 +1444,13 @@ function moveSeriesToProject(seriesId, projectName) {
   selectedTreeKey = `playlist:${series.id}`;
   saveData();
   render();
+  const message = aliasAdded
+    ? `「${series.title}」を移動し、今後の分類用の別名にも追加しました`
+    : `「${series.title}」を「${targetName}」へ移動しました`;
   showToast(
-    aliasAdded
-      ? `「${series.title}」を移動し、今後の分類用の別名にも追加しました`
-      : `「${series.title}」を「${targetName}」へ移動しました`,
+    removedEmptyFolder
+      ? `${message}。空になった「${oldName}」フォルダーも削除しました`
+      : message,
   );
   return true;
 }
@@ -2093,6 +2285,35 @@ $("#folderForm").querySelectorAll(".close-button, .secondary-button").forEach((b
 elements.folderName.addEventListener("input", () => {
   $("#folderNameError").textContent = "";
 });
+elements.folderIconSearch.addEventListener("input", () => {
+  clearTimeout(folderIconSearchTimer);
+  folderIconSearchTimer = setTimeout(
+    () => searchFolderIcons(elements.folderIconSearch.value),
+    280,
+  );
+});
+elements.folderIconSearch.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    clearTimeout(folderIconSearchTimer);
+    searchFolderIcons(elements.folderIconSearch.value);
+  }
+  if (event.key === "Escape" && elements.folderIconSearch.value) {
+    event.preventDefault();
+    elements.folderIconSearch.value = "";
+    showBuiltinFolderIcons();
+  }
+});
+elements.folderIconResults.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-folder-icon]");
+  if (!option) return;
+  selectedFolderIcon = normalizeFolderIcon(option.dataset.folderIcon);
+  updateFolderIconSelection();
+});
+$("#resetFolderIcon").addEventListener("click", () => {
+  selectedFolderIcon = "";
+  updateFolderIconSelection();
+});
 $("#deleteFolder").addEventListener("click", () => {
   if (editingFolderOriginalName) deleteFolder(editingFolderOriginalName);
 });
@@ -2189,6 +2410,9 @@ $("#projectForm").addEventListener("submit", (event) => {
   const aliasAdded = editingProjectOriginalName !== name &&
     learnRecentImportCorrection(series, name);
   if (!aliasAdded) learnPlaylistTitle(name, series.title);
+  const removedEmptyFolder =
+    editingProjectOriginalName !== name &&
+    removeProjectIfEmpty(editingProjectOriginalName);
   config.expandedProjects ||= {};
   config.expandedProjects[name] = true;
   selectedTreeKey = `playlist:${series.id}`;
@@ -2196,10 +2420,13 @@ $("#projectForm").addEventListener("submit", (event) => {
   saveData();
   elements.projectDialog.close();
   render();
+  const message = aliasAdded
+    ? `「${name}」へ移動し、今後の分類用の別名にも追加しました`
+    : `「${name}」フォルダーへ移動しました`;
   showToast(
-    aliasAdded
-      ? `「${name}」へ移動し、今後の分類用の別名にも追加しました`
-      : `「${name}」フォルダーへ移動しました`,
+    removedEmptyFolder
+      ? `${message}。空になった「${editingProjectOriginalName}」フォルダーも削除しました`
+      : message,
   );
 });
 $(".close-button", elements.projectDialog).addEventListener("click", () =>

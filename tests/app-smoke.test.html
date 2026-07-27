@@ -9,10 +9,12 @@
     setTimeout(() => {
       const appWindow = frame.contentWindow;
       const appDocument = frame.contentDocument;
+      appDocument.querySelector("#newProject")?.click();
       const checks = [
         ["分類モジュールを読み込める", Boolean(appWindow.CuratProjectMatch)],
         ["並び替えモジュールを読み込める", Boolean(appWindow.CuratPlaylistOrder)],
         ["フォルダー順序モジュールを読み込める", Boolean(appWindow.CuratFolderOrder)],
+        ["フォルダー表示モジュールを読み込める", Boolean(appWindow.CuratFolderDisplay)],
         [
           "アプリの初期描画が完了する",
           Boolean(appDocument.querySelector(".workspace-welcome, .workspace .detail-layout")),
@@ -61,6 +63,20 @@
             [...appDocument.querySelectorAll("#folderForm button[value='cancel']")].every(
               (button) => button.type === "button",
             ),
+        ],
+        [
+          "フォルダーアイコンを検索・選択できる",
+          Boolean(
+            appDocument.querySelector("#folderIconSearch") &&
+              appDocument.querySelector("#folderIconResults") &&
+              appDocument.querySelector("#resetFolderIcon"),
+          ),
+        ],
+        [
+          "新規フォルダーでは削除操作を隠して内蔵アイコンを表示する",
+          appDocument.querySelector("#folderDialog")?.open &&
+            appDocument.querySelector("#deleteFolder")?.hidden &&
+            appDocument.querySelectorAll("#folderIconResults [data-folder-icon]").length === 8,
         ],
         [
           "API キーを Enter キーで保存できる",

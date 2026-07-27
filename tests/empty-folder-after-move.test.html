@@ -1,0 +1,101 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script>
+  const DATA_KEY = "playlog:data:v1";
+  const CONFIG_KEY = "playlog:config:v1";
+  const SOURCE_PROJECT = "誤分類";
+  const TARGET_PROJECT = "正しい分類";
+  const now = "2026-07-27T00:00:00.000Z";
+  const series = ["a", "b", "c"].map((id) => ({
+    id,
+    title: `プレイリスト ${id.toUpperCase()}`,
+    channelTitle: `チャンネル ${id.toUpperCase()}`,
+    project: id === "b" ? TARGET_PROJECT : SOURCE_PROJECT,
+    thumbnail: "",
+    tasks: [],
+    createdAt: now,
+    updatedAt: now,
+  }));
+
+  localStorage.setItem(DATA_KEY, JSON.stringify({
+    version: 1,
+    updatedAt: now,
+    series,
+    projects: [
+      { name: SOURCE_PROJECT, aliases: ["誤り"], learnedAliases: [] },
+      { name: TARGET_PROJECT, aliases: [], learnedAliases: [] },
+    ],
+    playlistOrder: ["a", "b", "c"],
+  }));
+  localStorage.setItem(CONFIG_KEY, JSON.stringify({
+    expandedProjects: {
+      [SOURCE_PROJECT]: true,
+      [TARGET_PROJECT]: true,
+    },
+  }));
+
+  const frame = document.querySelector("iframe");
+  frame.addEventListener("load", () => {
+    setTimeout(() => {
+      const appDocument = frame.contentDocument;
+      const source = appDocument.querySelector('[data-project-series="a"]');
+      const targetFolder = [...appDocument.querySelectorAll("[data-tree-folder]")]
+        .find((item) => item.dataset.treeFolder === TARGET_PROJECT);
+      const dataTransfer = new DataTransfer();
+
+      source.dispatchEvent(new DragEvent("dragstart", {
+        bubbles: true,
+        dataTransfer,
+      }));
+      targetFolder.dispatchEvent(new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer,
+      }));
+      targetFolder.dispatchEvent(new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer,
+      }));
+
+      setTimeout(() => {
+        const afterFirstMove = JSON.parse(localStorage.getItem(DATA_KEY));
+        const sourceKeptWhileOccupied =
+          afterFirstMove.projects.some((project) => project.name === SOURCE_PROJECT) &&
+          afterFirstMove.series.find((item) => item.id === "c")?.project === SOURCE_PROJECT;
+
+        const lastSourcePlaylist = appDocument.querySelector('[data-project-series="c"]');
+        lastSourcePlaylist.click();
+        appDocument.querySelector('[data-detail-action="project"]').click();
+        appDocument.querySelector("#projectNameInput").value = TARGET_PROJECT;
+        appDocument.querySelector("#projectForm").requestSubmit(
+          appDocument.querySelector("#saveProject"),
+        );
+
+        setTimeout(() => {
+          const saved = JSON.parse(localStorage.getItem(DATA_KEY));
+          const savedConfig = JSON.parse(localStorage.getItem(CONFIG_KEY));
+          const sourceFolderExists = [...appDocument.querySelectorAll("[data-tree-folder]")]
+            .some((item) => item.dataset.treeFolder === SOURCE_PROJECT);
+          const passed =
+            sourceKeptWhileOccupied &&
+            saved.series.filter((item) => item.project === TARGET_PROJECT).length === 3 &&
+            !saved.projects.some((project) => project.name === SOURCE_PROJECT) &&
+            !Object.hasOwn(savedConfig.expandedProjects || {}, SOURCE_PROJECT) &&
+            !sourceFolderExists;
+
+          document.querySelector("#result").textContent = passed
+            ? "PASS moving the last playlist removes only the emptied source folder"
+            : `FAIL kept=${sourceKeptWhileOccupied} projects=${JSON.stringify(saved.projects)} config=${JSON.stringify(savedConfig.expandedProjects)} sourceRendered=${sourceFolderExists}`;
+          document.title = passed ? "PASS" : "FAIL";
+          localStorage.removeItem(DATA_KEY);
+          localStorage.removeItem(CONFIG_KEY);
+        }, 100);
+      }, 600);
+    }, 500);
+  }, { once: true });
+  frame.src = "../index.html";
+</script>
