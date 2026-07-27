@@ -1,0 +1,17 @@
+{
+  "name": "Curat — 実況プレイリスト・コレクション",
+  "short_name": "Curat",
+  "description": "YouTube のゲーム実況プレイリストを視聴タスクとして管理します。",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0d203b",
+  "theme_color": "#0d203b",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

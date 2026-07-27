@@ -1,0 +1,89 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>project-match tests</title>
+<pre id="result">running</pre>
+<script src="../project-match.js"></script>
+<script>
+  const {
+    normalizeForProjectMatch,
+    classifyProject,
+    rememberLearnedAlias,
+  } = window.CuratProjectMatch;
+  const failures = [];
+  let assertions = 0;
+
+  function equal(actual, expected, message) {
+    assertions += 1;
+    if (actual !== expected) {
+      failures.push(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+  }
+
+  const projects = [
+    {
+      name: "ポケットモンスター",
+      aliases: ["Pocket Monsters", "Pokémon"],
+      learnedAliases: [],
+    },
+    {
+      name: "ゼルダの伝説",
+      aliases: ["The Legend of Zelda"],
+      learnedAliases: ["Tears of the Kingdom 実況"],
+    },
+  ];
+
+  equal(
+    normalizeForProjectMatch("Ｐｏｋéｍｏｎ"),
+    "pokemon",
+    "全角・アクセントを正規化する",
+  );
+  equal(
+    normalizeForProjectMatch("ポケット モンスター"),
+    normalizeForProjectMatch("ぽけっと・もんすたー"),
+    "ひらがな・カタカナ・区切りを同一視する",
+  );
+
+  const exact = classifyProject("【実況】Pokémon Scarlet #1", projects);
+  equal(exact.projectName, "ポケットモンスター", "手動別名の包含一致");
+  equal(exact.matchType, "exact", "包含一致の種別");
+
+  const typo = classifyProject("Pockets Monsters Scarlet 実況", projects);
+  equal(typo.projectName, "ポケットモンスター", "編集距離による表記ゆれ");
+  equal(typo.matchType, "fuzzy", "近似一致の種別");
+
+  const learned = classifyProject("Tears of Kingdom 実況プレイ", projects);
+  equal(learned.projectName, "ゼルダの伝説", "学習済み別名を照合する");
+  equal(learned.createNew, false, "学習済み別名では新規作成しない");
+
+  const unrelated = classifyProject("スーパーマリオブラザーズ ワンダー", projects);
+  equal(unrelated.createNew, true, "低スコアなら新規フォルダーにする");
+  equal(
+    unrelated.projectName,
+    "スーパーマリオブラザーズ ワンダー",
+    "新規フォルダーにはプレイリスト名を使う",
+  );
+
+  const ambiguous = classifyProject("Pokemon 実況", [
+    { name: "赤", aliases: ["Pokemon"], learnedAliases: [] },
+    { name: "青", aliases: ["Pokemon"], learnedAliases: [] },
+  ]);
+  equal(ambiguous.createNew, true, "同一スコアの候補が拮抗したら新規作成する");
+  equal(ambiguous.matchType, "ambiguous", "候補拮抗の種別");
+
+  const longest = classifyProject("Zelda BOTW", [
+    { name: "Zelda", aliases: [], learnedAliases: [] },
+    { name: "Breath of the Wild", aliases: ["Zelda BOTW"], learnedAliases: [] },
+  ]);
+  equal(longest.projectName, "Breath of the Wild", "完全一致では最長の候補を優先する");
+
+  const learningProject = { name: "正式名", aliases: [], learnedAliases: [] };
+  equal(rememberLearnedAlias(learningProject, "実況での表記"), true, "別名を学習する");
+  equal(rememberLearnedAlias(learningProject, "実況での表記"), false, "重複学習を防ぐ");
+  equal(learningProject.learnedAliases.length, 1, "学習済み別名をDBに保持する");
+
+  const output = failures.length
+    ? `FAIL ${failures.length}/${assertions}\n${failures.join("\n")}`
+    : `PASS ${assertions}/${assertions}`;
+  document.querySelector("#result").textContent = output;
+  document.title = failures.length ? "FAIL" : "PASS";
+</script>
