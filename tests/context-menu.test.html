@@ -1,0 +1,97 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script>
+  const DATA_KEY = "playlog:data:v1";
+  const CONFIG_KEY = "playlog:config:v1";
+  const now = "2026-07-27T00:00:00.000Z";
+  localStorage.setItem(DATA_KEY, JSON.stringify({
+    version: 1,
+    updatedAt: now,
+    series: [{
+      id: "context-menu-series",
+      title: "テストプレイリスト",
+      channelTitle: "テストチャンネル",
+      project: "テストフォルダー",
+      thumbnail: "",
+      tasks: [],
+      createdAt: now,
+      updatedAt: now,
+    }],
+    projects: [{
+      name: "テストフォルダー",
+      aliases: [],
+      learnedAliases: [],
+      icon: "builtin:gamepad",
+    }],
+    playlistOrder: ["context-menu-series"],
+  }));
+  localStorage.setItem(CONFIG_KEY, JSON.stringify({
+    expandedProjects: { "テストフォルダー": true },
+  }));
+
+  const frame = document.querySelector("iframe");
+  frame.addEventListener("load", () => {
+    setTimeout(() => {
+      const appDocument = frame.contentDocument;
+      const folderRow = appDocument.querySelector("[data-tree-folder='テストフォルダー']");
+      folderRow.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 220,
+        clientY: 180,
+      }));
+
+      const folderActions = [...appDocument.querySelectorAll("[data-context-action]")]
+        .map((item) => [item.dataset.contextAction, item.textContent.trim()]);
+      const folderSections = [...appDocument.querySelectorAll(".context-menu-section-label")]
+        .map((item) => item.textContent.trim());
+      const folderMenuPassed =
+        folderSections.join(",") === "作成・編集,表示,管理" &&
+        folderActions.some(([action, label]) =>
+          action === "new-folder" && label.includes("新しいフォルダーを作成")) &&
+        folderActions.some(([action, label]) =>
+          action === "edit-folder" && label.includes("フォルダー名を変更")) &&
+        folderActions.some(([action, label]) =>
+          action === "change-folder-icon" && label.includes("アイコンを変更")) &&
+        folderActions.some(([action]) => action === "collapse-folder") &&
+        !folderActions.some(([action]) => action === "expand-folder") &&
+        folderActions.some(([action]) => action === "delete-folder");
+
+      appDocument.querySelector("[data-context-action='change-folder-icon']").click();
+      setTimeout(() => {
+        const iconFocusPassed =
+          appDocument.activeElement === appDocument.querySelector("#folderIconSearch");
+        appDocument.querySelector("#folderEditorPopover .close-button").click();
+
+        const playlist = appDocument.querySelector("[data-project-series='context-menu-series']");
+        playlist.dispatchEvent(new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 250,
+          clientY: 240,
+        }));
+        const playlistActions = [...appDocument.querySelectorAll("[data-context-action]")]
+          .map((item) => [item.dataset.contextAction, item.textContent.trim()]);
+        const playlistSections = [...appDocument.querySelectorAll(".context-menu-section-label")]
+          .map((item) => item.textContent.trim());
+        const playlistMenuPassed =
+          playlistSections.join(",") === "再生,整理,管理" &&
+          playlistActions.some(([action, label]) =>
+            action === "move-playlist" && label.includes("プレイリストを移動")) &&
+          playlistActions.some(([action]) => action === "delete-playlist");
+
+        const passed = folderMenuPassed && iconFocusPassed && playlistMenuPassed;
+        document.querySelector("#result").textContent = passed
+          ? "PASS context menus group explicit folder and playlist actions"
+          : `FAIL folder=${folderMenuPassed} iconFocus=${iconFocusPassed} playlist=${playlistMenuPassed}`;
+        document.title = passed ? "PASS" : "FAIL";
+        localStorage.removeItem(DATA_KEY);
+        localStorage.removeItem(CONFIG_KEY);
+      }, 50);
+    }, 500);
+  }, { once: true });
+  frame.src = "../index.html";
+</script>

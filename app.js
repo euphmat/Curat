@@ -906,6 +906,10 @@ function renderDetail(seriesId) {
   }
   const stats = getSeriesStats(series);
   const tasks = series.tasks.filter((task) => !task.archived);
+  const watchableTasks = tasks.filter((task) => task.status !== "skipped");
+  const canContinue = watchableTasks.length > 0;
+  const canCompleteAll = watchableTasks.some((task) => task.status !== "done");
+  const canResetProgress = tasks.some((task) => task.status !== "todo");
   const remaining = Math.max(0, stats.total - stats.done);
   elements.detailContent.innerHTML = `
     <div class="detail-layout">
@@ -944,10 +948,13 @@ function renderDetail(seriesId) {
             </div>
           </div>
           <div class="detail-actions" role="group" aria-label="プレイリスト操作">
-            <button class="compact-button detail-action-button" type="button" data-detail-action="project" aria-label="フォルダーを変更" title="フォルダーを変更">${icon("folder")}<span class="detail-action-label">移動</span></button>
-            <button class="compact-button detail-action-button" type="button" data-detail-action="sync" aria-label="YouTube と再同期" title="YouTube と再同期">${icon("refresh")}<span class="detail-action-label">同期</span></button>
-            <a class="compact-button detail-action-button youtube-button" href="${escapeHtml(series.sourceUrl)}" target="_blank" rel="noreferrer" aria-label="YouTube で開く（新しいタブ）" title="YouTube で開く">${icon("youtube", "youtube-icon")}<span class="detail-action-label">YouTube</span></a>
-            <button class="compact-button detail-action-button is-danger" type="button" data-detail-action="delete" aria-label="プレイリストを削除" title="プレイリストを削除">${icon("trash")}<span class="detail-action-label">削除</span></button>
+            <button class="compact-button detail-action-button is-primary" type="button" data-detail-action="continue" aria-label="続きを見る" title="続きを見る"${canContinue ? "" : " disabled"}>${icon("play")}</button>
+            <button class="compact-button detail-action-button" type="button" data-detail-action="complete-all" aria-label="すべて視聴済みにする" title="すべて視聴済みにする"${canCompleteAll ? "" : " disabled"}>${icon("check-all")}</button>
+            <button class="compact-button detail-action-button" type="button" data-detail-action="reset-progress" aria-label="視聴進捗をリセット" title="視聴進捗をリセット"${canResetProgress ? "" : " disabled"}>${icon("undo")}</button>
+            <button class="compact-button detail-action-button" type="button" data-detail-action="project" aria-label="フォルダーを変更" title="フォルダーを変更">${icon("folder")}</button>
+            <button class="compact-button detail-action-button" type="button" data-detail-action="sync" aria-label="YouTube と再同期" title="YouTube と再同期">${icon("refresh")}</button>
+            <a class="compact-button detail-action-button youtube-button" href="${escapeHtml(series.sourceUrl)}" target="_blank" rel="noreferrer" aria-label="YouTube で開く（新しいタブ）" title="YouTube で開く">${icon("youtube", "youtube-icon")}</a>
+            <button class="compact-button detail-action-button is-danger" type="button" data-detail-action="delete" aria-label="プレイリストを削除" title="プレイリストを削除">${icon("trash")}</button>
           </div>
         </div>
         <div class="task-list-heading">
@@ -1266,7 +1273,7 @@ function openFolderDialog(projectName = null) {
   requestAnimationFrame(() => elements.folderName.select());
 }
 
-function openFolderEditorPopover(projectName, anchor = null) {
+function openFolderEditorPopover(projectName, anchor = null, focusTarget = "name") {
   const resolvedAnchor = anchor || folderRowByName(projectName);
   prepareFolderEditor(projectName, "popover");
   folderEditorAnchor = resolvedAnchor;
@@ -1275,7 +1282,13 @@ function openFolderEditorPopover(projectName, anchor = null) {
   positionFolderEditorPopover();
   requestAnimationFrame(() => {
     positionFolderEditorPopover();
-    elements.folderName.select();
+    if (focusTarget === "icon") {
+      elements.folderIconSearch.focus();
+      elements.folderIconSearch.select();
+      elements.folderIconSearch.scrollIntoView({ block: "center" });
+    } else {
+      elements.folderName.select();
+    }
   });
 }
 
@@ -1338,7 +1351,13 @@ function saveFolderFromDialog() {
   return true;
 }
 
-function requestConfirmation({ title, message, actionLabel = "削除する" }) {
+function requestConfirmation({
+  title,
+  message,
+  actionLabel = "削除する",
+  actionIcon = "trash",
+  actionTone = "danger",
+}) {
   if (elements.confirmDialog.open) {
     confirmResolver?.(false);
     confirmResolver = null;
@@ -1346,7 +1365,8 @@ function requestConfirmation({ title, message, actionLabel = "削除する" }) {
   }
   $("#confirmTitle").textContent = title;
   $("#confirmMessage").textContent = message;
-  $("#confirmAction").innerHTML = `${icon("trash")}<span>${escapeHtml(actionLabel)}</span>`;
+  $("#confirmAction").className = actionTone === "danger" ? "danger-button" : "primary-button";
+  $("#confirmAction").innerHTML = `${icon(actionIcon)}<span>${escapeHtml(actionLabel)}</span>`;
   elements.confirmDialog.returnValue = "";
   elements.confirmDialog.showModal();
   requestAnimationFrame(() => $("#confirmAction").focus());
@@ -1439,25 +1459,31 @@ function contextMenuItems(kind, id) {
     return {
       label: series ? getChannelName(series) : "プレイリスト",
       items: [
+        ["group", "再生"],
         ["open-playlist", "panel", "詳細を開く", "Enter"],
         ["watch-playlist", "play", "続きを見る", ""],
-        ["move-playlist", "move", "フォルダーを変更…", "F2"],
+        ["group", "整理"],
+        ["move-playlist", "move", "プレイリストを移動…", "F2"],
+        ["group", "管理"],
         ["sync-playlist", "refresh", "YouTube と再同期", ""],
-        ["separator"],
         ["delete-playlist", "trash", "プレイリストを削除…", "Delete", true],
       ],
     };
   }
   if (kind === "folder") {
+    const expanded = config.expandedProjects?.[id] !== false;
     return {
-      label: id,
+      label: displayFolderName(id),
       items: [
-        ["new-folder", "folder-plus", "新しいフォルダー…", ""],
-        ["edit-folder", "edit", "クイック編集", "F2"],
-        ["separator"],
-        ["expand-folder", "chevrons-down", "フォルダーを展開", ""],
-        ["collapse-folder", "chevrons-up", "フォルダーを折りたたむ", ""],
-        ["separator"],
+        ["group", "作成・編集"],
+        ["new-folder", "folder-plus", "新しいフォルダーを作成…", ""],
+        ["edit-folder", "edit", "フォルダー名を変更…", "F2"],
+        ["change-folder-icon", "sparkles", "アイコンを変更…", ""],
+        ["group", "表示"],
+        expanded
+          ? ["collapse-folder", "chevrons-up", "フォルダーを折りたたむ", ""]
+          : ["expand-folder", "chevrons-down", "フォルダーを展開", ""],
+        ["group", "管理"],
         ["delete-folder", "trash", "フォルダーを削除…", "Delete", true],
       ],
     };
@@ -1465,7 +1491,9 @@ function contextMenuItems(kind, id) {
   return {
     label: "エクスプローラー",
     items: [
-      ["new-folder", "folder-plus", "新しいフォルダー…", ""],
+      ["group", "作成"],
+      ["new-folder", "folder-plus", "新しいフォルダーを作成…", ""],
+      ["group", "表示"],
       ["expand-all", "chevrons-down", "すべて展開", ""],
       ["collapse-all", "chevrons-up", "すべて折りたたむ", ""],
     ],
@@ -1482,6 +1510,8 @@ function openTreeContextMenu(kind, id, x, y) {
       .map((item) =>
         item[0] === "separator"
           ? '<div class="context-menu-separator" role="separator"></div>'
+          : item[0] === "group"
+            ? `<div class="context-menu-section-label">${escapeHtml(item[1])}</div>`
           : `<button class="context-menu-item${item[4] ? " is-danger" : ""}" type="button" role="menuitem" data-context-action="${item[0]}">
               <span class="context-menu-icon" aria-hidden="true">${icon(item[1])}</span>
               <span>${item[2]}</span>
@@ -1509,6 +1539,7 @@ async function runTreeContextAction(action) {
   if (!target) return;
   if (action === "new-folder") openFolderDialog();
   if (action === "edit-folder") openFolderEditorPopover(target.id);
+  if (action === "change-folder-icon") openFolderEditorPopover(target.id, null, "icon");
   if (action === "expand-folder") setProjectExpanded(target.id, true);
   if (action === "collapse-folder") setProjectExpanded(target.id, false);
   if (action === "expand-all") setAllProjectsExpanded(true);
@@ -1845,6 +1876,61 @@ function updateTask(seriesId, taskId, nextStatus) {
   render();
 }
 
+async function completeAllTasks(seriesId) {
+  const series = data.series.find((item) => item.id === seriesId);
+  const tasks = series?.tasks.filter((task) => !task.archived && task.status !== "skipped") || [];
+  const pendingTasks = tasks.filter((task) => task.status !== "done");
+  if (!pendingTasks.length) {
+    showToast(tasks.length ? "すべて視聴済みです" : "視聴済みにする動画がありません");
+    return;
+  }
+  const confirmed = await requestConfirmation({
+    title: "すべて視聴済みにする",
+    message: `未完了の ${pendingTasks.length} 本を視聴済みにします。スキップ中の動画は変更しません。`,
+    actionLabel: "すべて視聴済みにする",
+    actionIcon: "check-all",
+    actionTone: "primary",
+  });
+  if (!confirmed) return;
+
+  const updatedAt = new Date().toISOString();
+  pendingTasks.forEach((task) => {
+    task.status = "done";
+    task.updatedAt = updatedAt;
+  });
+  series.updatedAt = updatedAt;
+  saveData();
+  render();
+  showToast(`${pendingTasks.length} 本を視聴済みにしました`);
+}
+
+async function resetSeriesProgress(seriesId) {
+  const series = data.series.find((item) => item.id === seriesId);
+  const tasks = series?.tasks.filter((task) => !task.archived) || [];
+  const changedTasks = tasks.filter((task) => task.status !== "todo");
+  if (!changedTasks.length) {
+    showToast(tasks.length ? "視聴進捗はすでに未視聴です" : "リセットする動画がありません");
+    return;
+  }
+  const confirmed = await requestConfirmation({
+    title: "視聴進捗をリセット",
+    message: `${tasks.length} 本の視聴状態をすべて「未視聴」に戻します。`,
+    actionLabel: "進捗をリセット",
+    actionIcon: "undo",
+  });
+  if (!confirmed) return;
+
+  const updatedAt = new Date().toISOString();
+  tasks.forEach((task) => {
+    task.status = "todo";
+    task.updatedAt = updatedAt;
+  });
+  series.updatedAt = updatedAt;
+  saveData();
+  render();
+  showToast("視聴進捗をリセットしました");
+}
+
 function firstWatchableTask(series) {
   return (
     series.tasks.find((task) => !task.archived && task.status === "doing") ||
@@ -2121,6 +2207,18 @@ elements.detailContent.addEventListener("click", async (event) => {
   const action = control.dataset.detailAction;
   const series = data.series.find((item) => item.id === detailSeriesId);
   if (!series) return;
+  if (action === "continue") {
+    continueSeries(series.id);
+    return;
+  }
+  if (action === "complete-all") {
+    await completeAllTasks(series.id);
+    return;
+  }
+  if (action === "reset-progress") {
+    await resetSeriesProgress(series.id);
+    return;
+  }
   if (action === "project") {
     openProjectDialog(series.id);
     return;

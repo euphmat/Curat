@@ -2080,8 +2080,10 @@ body.detail-pinned .detail-sidebar {
 .tree-context-menu {
   position: fixed;
   z-index: 120;
-  width: 220px;
-  padding: 5px;
+  width: 246px;
+  max-height: calc(100vh - 16px);
+  padding: 6px;
+  overflow-y: auto;
   color: var(--text);
   background: #151b19;
   border: 1px solid #596660;
@@ -2094,15 +2096,27 @@ body.detail-pinned .detail-sidebar {
 }
 
 .context-menu-label {
-  padding: 7px 9px 5px;
+  padding: 8px 10px 7px;
   overflow: hidden;
   color: #7d8a85;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.04em;
   text-overflow: ellipsis;
-  text-transform: uppercase;
   white-space: nowrap;
+}
+
+.context-menu-section-label {
+  margin: 5px 5px 2px;
+  padding: 6px 5px 3px;
+  color: #9187aa;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.context-menu-section-label:not(:first-of-type) {
+  border-top: 1px solid rgba(185, 164, 255, 0.16);
 }
 
 .context-menu-item {
@@ -6233,4 +6247,69 @@ body.detail-pinned .task-state-button {
   .folder-editor-popover .folder-icon-results {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
+}
+
+/* Playlist utility toolbar: icon-only controls stay inside the detail content. */
+.workspace .detail-toolbar {
+  grid-template-columns: minmax(220px, 1fr) minmax(0, auto);
+}
+
+.workspace .detail-actions {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-content: center;
+  overflow: visible;
+}
+
+.workspace .detail-action-button,
+.workspace .detail-action-button.youtube-button {
+  flex: 0 0 42px;
+  width: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+}
+
+.workspace .detail-action-button.is-primary {
+  color: #171029;
+  background: linear-gradient(135deg, #e5c8ff, #8beaf5);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.workspace .detail-action-button:disabled {
+  color: #746d86;
+  background: rgba(48, 42, 69, 0.35);
+  border-color: rgba(172, 157, 207, 0.1);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.workspace .detail-action-button:disabled:hover {
+  color: #746d86;
+  background: rgba(48, 42, 69, 0.35);
+  border-color: rgba(172, 157, 207, 0.1);
+  transform: none;
+}
+
+@media (max-width: 780px) {
+  .workspace .detail-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace .detail-actions {
+    overflow: visible;
+  }
+}
+
+/* Folder artwork stands on its own without a surrounding tile. */
+.folder-icon,
+.project-group.is-expanded .folder-icon,
+.project-group.is-drop-target .folder-icon,
+.project-group.is-drop-target.is-expanded .folder-icon,
+.project-group.is-import-target .folder-icon {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
