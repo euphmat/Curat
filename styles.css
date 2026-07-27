@@ -5635,6 +5635,7 @@ body.detail-pinned .task-state-button {
 }
 
 .workspace .task-list {
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -5821,8 +5822,7 @@ body.detail-pinned .task-state-button {
 
 @media (min-width: 1320px) {
   .workspace .task-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
+    grid-template-columns: 1fr;
   }
 }
 
