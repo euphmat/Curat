@@ -30,7 +30,17 @@ async function loadCuratTestData(frame, data) {
   input.files = transfer.files;
   input.dispatchEvent(new appWindow.Event("change", { bubbles: true }));
   await waitForCuratTest(
-    () => appDocument.querySelectorAll("[data-project-series]").length === data.series.length,
+    () => {
+      const renderedIds = new Set(
+        [...appDocument.querySelectorAll("[data-project-series]")].map(
+          (item) => item.dataset.projectSeries,
+        ),
+      );
+      return (
+        renderedIds.size === data.series.length &&
+        data.series.every((series) => renderedIds.has(series.id))
+      );
+    },
   );
 }
 

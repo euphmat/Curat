@@ -9,18 +9,20 @@
   const testData = {
     version: 1,
     updatedAt: now,
-    playlistOrder: ["utility-series"],
+    playlistOrder: ["utility-series-video-dismissal"],
     recommendationDismissals: {
+      playlists: ["id:hidden-playlist"],
+      videos: ["id:hidden-video"],
       games: ["project:非表示ゲーム"],
       channels: ["id:hidden-channel"],
     },
     projects: [{ name: "テスト", aliases: [], learnedAliases: [] }],
     series: [{
-      id: "utility-series",
+      id: "utility-series-video-dismissal",
       title: "一括操作テスト",
       channelTitle: "テストチャンネル",
       project: "テスト",
-      sourceUrl: "https://www.youtube.com/playlist?list=utility-series",
+      sourceUrl: "https://www.youtube.com/playlist?list=utility-series-video-dismissal",
       thumbnail: "",
       createdAt: now,
       updatedAt: now,
@@ -40,9 +42,10 @@
   };
 
   frame.addEventListener("load", async () => {
+    if (!frame.contentDocument.querySelector("#restoreInput")) return;
     await loadCuratTestData(frame, testData);
     const appDocument = frame.contentDocument;
-    appDocument.querySelector('[data-project-series="utility-series"]')?.click();
+    appDocument.querySelector('[data-project-series="utility-series-video-dismissal"]')?.click();
 
     const actions = [...appDocument.querySelectorAll(".detail-actions .detail-action-button")];
     const iconOnly =
@@ -68,6 +71,9 @@
       completed.find((task) => task.id === "skipped").status === "skipped" &&
       completed.find((task) => task.id === "archived").status === "doing";
     const dismissalsPreserved =
+      completedExport.recommendationDismissals.playlists.includes("id:hidden-playlist") &&
+      completedExport.recommendationDismissals.playlists.includes("id:hidden-video") &&
+      !("videos" in completedExport.recommendationDismissals) &&
       completedExport.recommendationDismissals.games[0] === "project:非表示ゲーム" &&
       completedExport.recommendationDismissals.channels[0] === "id:hidden-channel";
 
@@ -89,8 +95,8 @@
         completedCorrectly &&
         resetCorrectly &&
         dismissalsPreserved,
-      `icons=${iconOnly} actions=${actions.length} contained=${toolbarContained} complete=${completedCorrectly} reset=${resetCorrectly} dismissals=${dismissalsPreserved}`,
+      `icons=${iconOnly} actions=${actions.length} contained=${toolbarContained} complete=${completedCorrectly} reset=${resetCorrectly} dismissals=${JSON.stringify(completedExport.recommendationDismissals)}`,
     );
-  }, { once: true });
+  });
   frame.src = "../index.html";
 </script>

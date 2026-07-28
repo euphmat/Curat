@@ -15,8 +15,8 @@ const TOUCH_LONG_PRESS_MS = 560;
 const TOUCH_MOVE_THRESHOLD = 10;
 const RECOMMENDATION_PROJECT_SEARCH_LIMIT = 6;
 const RECOMMENDATION_CHANNEL_SEARCH_LIMIT = 6;
-const RECOMMENDATION_CANDIDATE_LIMIT = 50;
-const RECOMMENDATION_RESULT_LIMIT = 12;
+const RECOMMENDATION_CANDIDATE_LIMIT = 150;
+const RECOMMENDATION_RESULT_LIMIT_PER_TYPE = 8;
 const {
   parseEpisodeOrder,
   sortPlaylistTasks,
@@ -44,8 +44,9 @@ const {
   isRecommendationDismissed,
   recommendationChannelKey,
   recommendationGameKey,
+  recommendationPlaylistKey,
   recommendationType,
-  rankRecommendationCandidates,
+  rankRecommendationCandidatesByType,
 } = window.CuratRecommendations;
 const {
   toUpperCamelCase,
@@ -165,6 +166,7 @@ const defaultData = () => ({
   projects: [],
   playlistOrder: [],
   recommendationDismissals: {
+    playlists: [],
     games: [],
     channels: [],
   },
@@ -239,9 +241,23 @@ function loadBrowserSettings() {
       apiKey: String(saved.apiKey || ""),
       username: String(saved.username || ""),
       password: String(saved.password || ""),
+      recommendationPreviousIds: [
+        ...new Set(
+          (Array.isArray(saved.recommendationPreviousIds)
+            ? saved.recommendationPreviousIds
+            : [])
+            .map((id) => String(id || "").trim())
+            .filter(Boolean),
+        ),
+      ].slice(-RECOMMENDATION_RESULT_LIMIT_PER_TYPE * 3),
     };
   } catch {
-    return { apiKey: "", username: "", password: "" };
+    return {
+      apiKey: "",
+      username: "",
+      password: "",
+      recommendationPreviousIds: [],
+    };
   }
 }
 
@@ -413,6 +429,10 @@ function normalizeRecommendationDismissals(value = {}) {
       ),
     ].slice(-500);
   return {
+    playlists: uniqueKeys([
+      ...(Array.isArray(value.playlists) ? value.playlists : []),
+      ...(Array.isArray(value.videos) ? value.videos : []),
+    ]),
     games: uniqueKeys(value.games),
     channels: uniqueKeys(value.channels),
   };
@@ -831,6 +851,7 @@ function recommendationDataSignature() {
   );
   return [
     seriesSignature,
+    dismissals.playlists.slice().sort().join("|"),
     dismissals.games.slice().sort().join("|"),
     dismissals.channels.slice().sort().join("|"),
   ].join("::");
@@ -942,6 +963,13 @@ function recommendationCardHtml(candidate) {
         </div>
       </div>
       <div class="recommendation-actions">
+        <button
+          class="recommendation-dismiss-button"
+          type="button"
+          data-recommendation-action="dismiss-playlist"
+          aria-label="「${escapeHtml(candidate.title)}」を今後表示しない"
+          title="このプレイリストを表示しない"
+        >${icon("playlist-x")}</button>
         <button
           class="recommendation-dismiss-button"
           type="button"
@@ -1119,7 +1147,7 @@ async function loadRecommendations() {
         promise: fetchJson("playlists", {
           part: "snippet,contentDetails,status",
           channelId: channel.id,
-          maxResults: 25,
+          maxResults: 50,
         }),
       });
     }
@@ -1133,7 +1161,7 @@ async function loadRecommendations() {
           type: "playlist",
           q: `${projectName} 実況`,
           order: "relevance",
-          maxResults: 12,
+          maxResults: 50,
           regionCode: "JP",
           relevanceLanguage: "ja",
           safeSearch: "moderate",
@@ -1181,16 +1209,24 @@ async function loadRecommendations() {
       }
     }
 
-    recommendationCandidates = rankRecommendationCandidates(
+    const previousIds = recommendationCandidates.length
+      ? recommendationCandidates.map((candidate) => candidate.id)
+      : browserSettings.recommendationPreviousIds;
+    recommendationCandidates = rankRecommendationCandidatesByType(
       [...candidateMap.values()].filter(
         (candidate) =>
           candidate.privacyStatus !== "private" &&
           candidate.privacyStatus !== "unlisted",
       ),
       profile,
-      RECOMMENDATION_RESULT_LIMIT,
+      RECOMMENDATION_RESULT_LIMIT_PER_TYPE,
       data.recommendationDismissals,
+      previousIds,
     );
+    browserSettings.recommendationPreviousIds = recommendationCandidates.map(
+      (candidate) => candidate.id,
+    );
+    saveBrowserSettings();
     recommendationLastUpdatedAt = new Date().toISOString();
     recommendationSourceSignature = recommendationDataSignature();
   } catch (error) {
@@ -3328,17 +3364,26 @@ elements.recommendationResults.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-recommendation-action]");
   if (!button || button.disabled) return;
   const action = button.dataset.recommendationAction;
-  if (action === "dismiss-game" || action === "dismiss-channel") {
+  if (
+    action === "dismiss-playlist" ||
+    action === "dismiss-game" ||
+    action === "dismiss-channel"
+  ) {
     const card = button.closest("[data-recommendation-id]");
     const candidate = recommendationCandidates.find(
       (item) => item.id === card?.dataset.recommendationId,
     );
     if (!candidate) return;
-    const kind = action === "dismiss-game" ? "games" : "channels";
-    const key =
-      kind === "games"
-        ? recommendationGameKey(candidate)
-        : recommendationChannelKey(candidate);
+    const kind = {
+      "dismiss-playlist": "playlists",
+      "dismiss-game": "games",
+      "dismiss-channel": "channels",
+    }[action];
+    const key = {
+      playlists: recommendationPlaylistKey,
+      games: recommendationGameKey,
+      channels: recommendationChannelKey,
+    }[kind](candidate);
     if (!key) return;
     data.recommendationDismissals = normalizeRecommendationDismissals({
       ...data.recommendationDismissals,
@@ -3352,9 +3397,11 @@ elements.recommendationResults.addEventListener("click", async (event) => {
     recommendationSourceSignature = recommendationDataSignature();
     renderRecommendationResults();
     showToast(
-      kind === "games"
-        ? "このゲームをおすすめに表示しないようにしました"
-        : "このチャンネルをおすすめに表示しないようにしました",
+      {
+        playlists: "このプレイリストをおすすめに表示しないようにしました",
+        games: "このゲームをおすすめに表示しないようにしました",
+        channels: "このチャンネルをおすすめに表示しないようにしました",
+      }[kind],
     );
     return;
   }

@@ -141,7 +141,22 @@
     return channelTitle ? `title:${channelTitle}` : "";
   }
 
+  function recommendationPlaylistKey(candidate) {
+    const playlistId = String(candidate?.id || "").trim();
+    return playlistId ? `id:${playlistId}` : "";
+  }
+
+  // Keep the old export name while existing saved data and integrations migrate
+  // from the earlier "video" wording to the accurate playlist wording.
+  const recommendationVideoKey = recommendationPlaylistKey;
+
   function isRecommendationDismissed(candidate, dismissals = {}) {
+    const dismissedPlaylists = new Set(
+      [
+        ...(Array.isArray(dismissals.playlists) ? dismissals.playlists : []),
+        ...(Array.isArray(dismissals.videos) ? dismissals.videos : []),
+      ],
+    );
     const dismissedGames = new Set(
       Array.isArray(dismissals.games) ? dismissals.games : [],
     );
@@ -149,6 +164,7 @@
       Array.isArray(dismissals.channels) ? dismissals.channels : [],
     );
     return (
+      dismissedPlaylists.has(recommendationPlaylistKey(candidate)) ||
       dismissedGames.has(recommendationGameKey(candidate)) ||
       dismissedChannels.has(recommendationChannelKey(candidate))
     );
@@ -205,10 +221,34 @@
     };
     return {
       ...scoredCandidate,
+      playlistKey: recommendationPlaylistKey(scoredCandidate),
+      videoKey: recommendationPlaylistKey(scoredCandidate),
       gameKey: recommendationGameKey(scoredCandidate),
       channelKey: recommendationChannelKey(scoredCandidate),
       recommendationType: recommendationType(scoredCandidate),
     };
+  }
+
+  function diversifyRecommendationGames(candidates) {
+    const groups = new Map();
+    for (const candidate of candidates) {
+      // Keep candidates whose game cannot be identified separate instead of
+      // accidentally treating every unknown title as the same game.
+      const gameKey = candidate.gameKey || recommendationGameKey(candidate);
+      const key = gameKey || `playlist:${candidate.id}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(candidate);
+    }
+
+    const diversified = [];
+    const queues = [...groups.values()];
+    while (queues.some((queue) => queue.length)) {
+      for (const queue of queues) {
+        const candidate = queue.shift();
+        if (candidate) diversified.push(candidate);
+      }
+    }
+    return diversified;
   }
 
   function rankRecommendationCandidates(
@@ -238,15 +278,16 @@
 
     // Keep each discovery tab useful before filling the remaining slots by
     // overall relevance.
-    const newChannelCandidates = ranked.filter(
-      (candidate) => candidate.recommendationType === "new-channel",
+    const newChannelCandidates = diversifyRecommendationGames(
+      ranked.filter((candidate) => candidate.recommendationType === "new-channel"),
     );
-    const newGameCandidates = ranked.filter(
-      (candidate) => candidate.recommendationType === "new-game",
+    const newGameCandidates = diversifyRecommendationGames(
+      ranked.filter((candidate) => candidate.recommendationType === "new-game"),
     );
-    const knownChannelCandidates = ranked.filter(
-      (candidate) => candidate.recommendationType === "known-channel",
+    const knownChannelCandidates = diversifyRecommendationGames(
+      ranked.filter((candidate) => candidate.recommendationType === "known-channel"),
     );
+    const diversified = diversifyRecommendationGames(ranked);
     const selected = [];
     const selectedIds = new Set();
     const selectCandidate = (candidate) => {
@@ -265,9 +306,45 @@
     newGameCandidates
       .slice(1, Math.max(1, Math.ceil(limit * 0.25)))
       .forEach(selectCandidate);
-    for (const candidate of ranked) {
+    for (const candidate of diversified) {
       if (selected.length >= limit) break;
       selectCandidate(candidate);
+    }
+    return selected;
+  }
+
+  function rankRecommendationCandidatesByType(
+    candidates,
+    profile,
+    limitPerType = 8,
+    dismissals = {},
+    previousIds = [],
+  ) {
+    if (limitPerType <= 0) return [];
+    const ranked = rankRecommendationCandidates(
+      candidates,
+      profile,
+      Number.MAX_SAFE_INTEGER,
+      dismissals,
+    );
+    const previous = new Set(
+      (Array.isArray(previousIds) ? previousIds : [])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean),
+    );
+    const selected = [];
+
+    for (const type of ["new-channel", "known-channel", "new-game"]) {
+      const candidatesForType = diversifyRecommendationGames(
+        ranked.filter((candidate) => candidate.recommendationType === type),
+      );
+      const fresh = candidatesForType.filter(
+        (candidate) => !previous.has(candidate.id),
+      );
+      const repeated = candidatesForType.filter((candidate) =>
+        previous.has(candidate.id),
+      );
+      selected.push(...[...fresh, ...repeated].slice(0, limitPerType));
     }
     return selected;
   }
@@ -278,8 +355,11 @@
     recommendationType,
     recommendationGameKey,
     recommendationChannelKey,
+    recommendationPlaylistKey,
+    recommendationVideoKey,
     isRecommendationDismissed,
     scoreRecommendationCandidate,
     rankRecommendationCandidates,
+    rankRecommendationCandidatesByType,
   };
 })(typeof window !== "undefined" ? window : globalThis);

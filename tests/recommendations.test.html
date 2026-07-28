@@ -8,7 +8,10 @@
     buildRecommendationProfile,
     recommendationChannelKey,
     recommendationGameKey,
+    recommendationPlaylistKey,
+    recommendationVideoKey,
     rankRecommendationCandidates,
+    rankRecommendationCandidatesByType,
     scoreRecommendationCandidate,
   } = window.CuratRecommendations;
   const failures = [];
@@ -92,6 +95,20 @@
     ),
     "id:channel-a",
     "チャンネルIDを除外用の識別子にする",
+  );
+  equal(
+    recommendationVideoKey(
+      todoRanked.find((item) => item.id === "same-channel"),
+    ),
+    "id:same-channel",
+    "旧名称でもプレイリストIDの除外識別子を返す",
+  );
+  equal(
+    recommendationPlaylistKey(
+      todoRanked.find((item) => item.id === "same-channel"),
+    ),
+    "id:same-channel",
+    "プレイリストIDを個別プレイリストの除外識別子にする",
   );
   equal(
     scoreRecommendationCandidate(
@@ -200,6 +217,78 @@
     "候補がある場合は3タブすべての項目を結果に残す",
   );
 
+  const gameDiversityProfile = buildRecommendationProfile(
+    [
+      {
+        id: "registered-a",
+        project: "ゲームA",
+        channelId: "registered-channel",
+        channelTitle: "登録済み実況者",
+      },
+      {
+        id: "registered-b",
+        project: "ゲームB",
+        channelId: "registered-channel",
+        channelTitle: "登録済み実況者",
+      },
+      {
+        id: "registered-c",
+        project: "ゲームC",
+        channelId: "registered-channel",
+        channelTitle: "登録済み実況者",
+      },
+    ],
+    [],
+  );
+  const gameDiversityRanked = rankRecommendationCandidates(
+    [
+      ...Array.from({ length: 5 }, (_, index) => ({
+        id: `game-a-${index}`,
+        title: `ゲームA 実況 Part ${index + 1}`,
+        channelId: `new-channel-a-${index}`,
+        channelTitle: `ゲームA実況者${index}`,
+        itemCount: 100 - index,
+      })),
+      {
+        id: "game-b",
+        title: "ゲームB 実況",
+        channelId: "new-channel-b",
+        channelTitle: "ゲームB実況者",
+        itemCount: 10,
+      },
+      {
+        id: "game-c",
+        title: "ゲームC 実況",
+        channelId: "new-channel-c",
+        channelTitle: "ゲームC実況者",
+        itemCount: 5,
+      },
+    ],
+    gameDiversityProfile,
+    3,
+  );
+  equal(
+    new Set(gameDiversityRanked.map((item) => item.gameKey)).size,
+    3,
+    "同じゲームの高評価候補が多くても異なるゲームを優先して表示する",
+  );
+  const singleGameRanked = rankRecommendationCandidates(
+    Array.from({ length: 4 }, (_, index) => ({
+      id: `single-game-${index}`,
+      title: `ゲームA 実況 Part ${index + 1}`,
+      channelId: `single-game-channel-${index}`,
+      channelTitle: `実況者${index}`,
+      itemCount: 20 - index,
+    })),
+    gameDiversityProfile,
+    3,
+  );
+  equal(
+    singleGameRanked.length,
+    3,
+    "別ゲームの候補がない場合は同じゲームでも表示枠を埋める",
+  );
+
   const dismissedGameKey = recommendationGameKey(
     todoRanked.find((item) => item.id === "same-project"),
   );
@@ -226,6 +315,87 @@
     false,
     "表示しないチャンネルを候補から除外する",
   );
+
+  const withoutDismissedPlaylist = rankRecommendationCandidates(
+    candidates,
+    todoProfile,
+    12,
+    { playlists: ["id:same-channel"], games: [], channels: [] },
+  );
+  equal(
+    withoutDismissedPlaylist.some((item) => item.id === "same-channel"),
+    false,
+    "表示しないプレイリストだけを候補から除外する",
+  );
+  equal(
+    withoutDismissedPlaylist.some((item) => item.id === "same-project"),
+    true,
+    "個別プレイリストの除外では別の候補を残す",
+  );
+  const withoutLegacyDismissedVideo = rankRecommendationCandidates(
+    candidates,
+    todoProfile,
+    12,
+    { videos: ["id:same-channel"], games: [], channels: [] },
+  );
+  equal(
+    withoutLegacyDismissedVideo.some((item) => item.id === "same-channel"),
+    false,
+    "旧形式の個別除外データも引き続き適用する",
+  );
+
+  const rotatingCandidates = [
+    ...Array.from({ length: 16 }, (_, index) => ({
+      id: `rotation-new-channel-${index}`,
+      title: `ゼルダの伝説 実況 ${index}`,
+      channelId: `rotation-channel-${index}`,
+      channelTitle: `新しい実況者${index}`,
+      sourceProjectNames: new Set(["ゼルダの伝説"]),
+      itemCount: 100 - index,
+    })),
+    ...Array.from({ length: 16 }, (_, index) => ({
+      id: `rotation-known-channel-${index}`,
+      title: `ゼルダの伝説 実況 Part ${index + 1}`,
+      channelId: "channel-a",
+      channelTitle: "実況者A",
+      itemCount: 100 - index,
+    })),
+    ...Array.from({ length: 16 }, (_, index) => ({
+      id: `rotation-new-game-${index}`,
+      title: `未登録ゲーム${index} 実況`,
+      channelId: "channel-a",
+      channelTitle: "実況者A",
+      itemCount: 100 - index,
+    })),
+  ];
+  const firstRotation = rankRecommendationCandidatesByType(
+    rotatingCandidates,
+    todoProfile,
+    8,
+  );
+  const secondRotation = rankRecommendationCandidatesByType(
+    rotatingCandidates,
+    todoProfile,
+    8,
+    {},
+    firstRotation.map((item) => item.id),
+  );
+  for (const type of ["new-channel", "known-channel", "new-game"]) {
+    const firstIds = new Set(
+      firstRotation
+        .filter((item) => item.recommendationType === type)
+        .map((item) => item.id),
+    );
+    const secondItems = secondRotation.filter(
+      (item) => item.recommendationType === type,
+    );
+    equal(secondItems.length, 8, `${type}を更新ごとに8件表示する`);
+    equal(
+      secondItems.some((item) => firstIds.has(item.id)),
+      false,
+      `${type}は候補が十分なら前回と異なる8件を表示する`,
+    );
+  }
 
   const doneSeries = structuredClone(baseSeries);
   doneSeries[0].tasks[0].status = "done";
