@@ -85,7 +85,13 @@
               !renameDialog.open &&
               iconDialog.classList.contains("folder-popup-dialog") &&
               iconDialog.classList.contains("is-popup-positioned") &&
-              appDocument.activeElement === appDocument.querySelector("#folderIconSearch");
+              appDocument.activeElement === appDocument.querySelector("#folderIconSearch") &&
+              appDocument.querySelectorAll("#folderIconResults [data-folder-icon]").length > 48 &&
+              Boolean(
+                appDocument.querySelector(
+                  "#folderIconResults [data-folder-icon='game-icons:health-potion']",
+                ),
+              );
             appDocument.querySelector("[data-folder-icon='builtin:sword']").click();
             const livePreview = [...appDocument.querySelectorAll("[data-tree-folder]")]
               .find((item) => item.dataset.treeFolder === "新しいフォルダー名")

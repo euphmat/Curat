@@ -6734,6 +6734,18 @@ body.is-touch-reordering {
   width: min(430px, calc(100vw - 24px));
 }
 
+.folder-create-dialog {
+  width: min(460px, calc(100vw - 24px));
+}
+
+.folder-create-dialog .alias-input {
+  min-height: 76px;
+}
+
+.folder-create-dialog .info-box {
+  padding: 12px 14px;
+}
+
 .folder-name-suggestions {
   margin: 5px 0 12px;
 }
@@ -6848,7 +6860,7 @@ body.is-touch-reordering {
 .folder-icon-dialog .folder-icon-results {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 5px;
-  max-height: min(390px, 46dvh);
+  max-height: min(480px, 52dvh);
   padding: 4px;
   overscroll-behavior: contain;
   background: rgba(15, 12, 36, 0.5);
@@ -6874,6 +6886,40 @@ body.is-touch-reordering {
 .folder-icon-dialog .folder-icon-status {
   min-height: 15px;
   margin-top: 4px;
+}
+
+.folder-icon-more {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 7px;
+  color: #e2d8f5;
+  font-size: 11px;
+  font-weight: 850;
+  background: linear-gradient(120deg, rgba(135, 100, 211, 0.25), rgba(67, 190, 219, 0.12));
+  border: 1px solid rgba(166, 224, 244, 0.28);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.folder-icon-more:hover {
+  color: #fff;
+  border-color: rgba(143, 234, 255, 0.58);
+}
+
+.folder-icon-more[hidden] {
+  display: none;
+}
+
+.folder-icon-credit {
+  display: block;
+  margin-top: 5px;
+  color: #817993;
+  font-size: 9px;
+  text-align: right;
+}
+
+.folder-icon-credit a {
+  color: #aaa0bf;
 }
 
 @keyframes folder-popup-in {

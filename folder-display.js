@@ -13,6 +13,16 @@
     "openmoji",
     "emojione",
     "fxemoji",
+    "game-icons",
+  ];
+  const RPG_ICON_PREFIXES = ["game-icons"];
+  const RPG_ICON_COLORS = [
+    "#f2b8ff",
+    "#8feaff",
+    "#ffd27d",
+    "#ff91bb",
+    "#a8ee9d",
+    "#b9a7ff",
   ];
 
   function formatAsciiWord(word) {
@@ -39,17 +49,36 @@
     return COLOR_ICON_PREFIXES.includes(String(value).split(":")[0]);
   }
 
+  function isRpgIconName(value) {
+    if (!isValidIconName(value)) return false;
+    return RPG_ICON_PREFIXES.includes(String(value).split(":")[0]);
+  }
+
+  function rpgIconColor(value) {
+    const hash = [...String(value)].reduce(
+      (total, character) => (total * 31 + character.codePointAt(0)) >>> 0,
+      0,
+    );
+    return RPG_ICON_COLORS[hash % RPG_ICON_COLORS.length];
+  }
+
   function iconifySvgUrl(value) {
     if (!isValidIconName(value)) return "";
     const [prefix, name] = value.split(":");
-    return `https://api.iconify.design/${encodeURIComponent(prefix)}/${encodeURIComponent(name)}.svg`;
+    const baseUrl =
+      `https://api.iconify.design/${encodeURIComponent(prefix)}/${encodeURIComponent(name)}.svg`;
+    return isRpgIconName(value)
+      ? `${baseUrl}?color=${encodeURIComponent(rpgIconColor(value))}`
+      : baseUrl;
   }
 
   root.CuratFolderDisplay = {
     toUpperCamelCase,
     isValidIconName,
     isColorIconName,
+    isRpgIconName,
     iconifySvgUrl,
     COLOR_ICON_PREFIXES,
+    RPG_ICON_PREFIXES,
   };
 })(typeof window !== "undefined" ? window : globalThis);

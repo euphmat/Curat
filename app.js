@@ -6,6 +6,8 @@ const API_BASE = "https://www.googleapis.com/youtube/v3";
 const BROWSER_SETTINGS_KEY = "curat-browser-settings-v1";
 const RECENT_FOLDER_ICONS_KEY = "curat-recent-folder-icons-v1";
 const RECENT_FOLDER_ICONS_LIMIT = 6;
+const FOLDER_ICON_SEARCH_LIMIT = 192;
+const FOLDER_ICON_SEARCH_ALL_LIMIT = 999;
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 480;
 const RECENT_IMPORT_CORRECTION_MS = 5 * 60 * 1000;
@@ -50,6 +52,75 @@ const BUILTIN_FOLDER_ICONS = [
   { value: "builtin:music", icon: "fluent-emoji-flat:musical-notes", label: "音楽", keywords: "music note 音楽" },
   { value: "builtin:star", icon: "fluent-emoji-flat:star", label: "お気に入り", keywords: "star favorite 星 お気に入り" },
 ];
+const RPG_FOLDER_ICONS = [
+  ["ancient-sword", "古代の剣", "剣 武器 sword weapon"],
+  ["battle-axe", "戦斧", "斧 武器 axe weapon"],
+  ["bow-arrow", "弓矢", "弓 矢 射手 bow arrow archer"],
+  ["broadsword", "大剣", "剣 武器 sword weapon"],
+  ["crossbow", "クロスボウ", "弓 武器 crossbow weapon"],
+  ["two-handed-sword", "両手剣", "剣 武器 sword weapon"],
+  ["warhammer", "戦槌", "槌 ハンマー 武器 hammer weapon"],
+  ["spear-hook", "槍", "槍 武器 spear weapon"],
+  ["round-shield", "丸盾", "盾 防具 shield armor"],
+  ["winged-shield", "翼の盾", "盾 防具 wing shield armor"],
+  ["shield-bounces", "防御", "盾 防御 guard shield"],
+  ["sword-clash", "剣戟", "戦闘 バトル battle sword"],
+  ["magic-swirl", "魔法陣", "魔法 魔術 magic spell"],
+  ["fairy-wand", "妖精の杖", "魔法 杖 fairy wand magic"],
+  ["wizard-staff", "魔導士の杖", "魔法 杖 wizard staff"],
+  ["spell-book", "魔導書", "魔法 本 spell book"],
+  ["crystal-ball", "水晶玉", "魔法 占い crystal ball"],
+  ["fire-gem", "炎の宝石", "炎 火 宝石 fire gem"],
+  ["ice-bolt", "氷魔法", "氷 魔法 ice magic"],
+  ["lightning-storm", "雷魔法", "雷 魔法 lightning magic"],
+  ["poison-bottle", "毒薬", "毒 薬 poison bottle"],
+  ["health-potion", "回復薬", "回復 薬 potion health"],
+  ["potion-ball", "ポーション", "薬 potion magic"],
+  ["potion-of-madness", "怪しい薬", "薬 potion poison"],
+  ["dragon-head", "ドラゴン", "竜 龍 dragon monster"],
+  ["double-dragon", "双竜", "竜 龍 dragon monster"],
+  ["wyvern", "ワイバーン", "竜 龍 wyvern monster"],
+  ["unicorn", "ユニコーン", "馬 幻獣 unicorn monster"],
+  ["wolf-head", "オオカミ", "狼 動物 wolf beast"],
+  ["orc-head", "オーク", "魔物 monster orc"],
+  ["goblin-head", "ゴブリン", "魔物 monster goblin"],
+  ["troll", "トロール", "魔物 monster troll"],
+  ["dwarf-helmet", "ドワーフ", "種族 dwarf"],
+  ["elf-helmet", "エルフ", "種族 elf"],
+  ["wizard-face", "魔導士", "魔法使い wizard mage"],
+  ["vampire-dracula", "吸血鬼", "魔物 vampire"],
+  ["skeleton", "スケルトン", "骸骨 魔物 skeleton"],
+  ["castle", "城", "城 王国 castle kingdom"],
+  ["dungeon-gate", "ダンジョン", "迷宮 dungeon gate"],
+  ["underground-cave", "洞窟", "洞窟 ダンジョン cave dungeon"],
+  ["tower-flag", "塔", "塔 ダンジョン tower"],
+  ["village", "村", "町 村 village town"],
+  ["campfire", "キャンプ", "焚き火 camp fire"],
+  ["treasure-map", "宝の地図", "宝 地図 treasure map"],
+  ["locked-chest", "宝箱", "宝箱 treasure chest"],
+  ["gold-stack", "ゴールド", "金貨 お金 gold coin"],
+  ["diamond-hard", "ダイヤ", "宝石 diamond gem"],
+  ["holy-grail", "聖杯", "宝物 holy grail"],
+  ["visored-helm", "騎士兜", "兜 騎士 helmet knight"],
+  ["hood", "フード", "装備 hood equipment"],
+  ["crowned-skull", "魔王", "王 骸骨 boss skull"],
+  ["skull-crossed-bones", "危険地帯", "骸骨 危険 skull danger"],
+  ["crown-of-thorns", "呪いの王冠", "王冠 呪い crown curse"],
+  ["gauntlet", "籠手", "防具 装備 gauntlet armor"],
+  ["boots", "ブーツ", "防具 装備 boots armor"],
+  ["ring", "指輪", "装備 アクセサリ ring"],
+  ["necklace", "首飾り", "装備 アクセサリ necklace"],
+  ["scroll-unfurled", "巻物", "魔法 書物 scroll"],
+  ["quill-ink", "クエスト", "依頼 物語 quest quill"],
+  ["dice-twenty-faces-twenty", "20面ダイス", "ダイス サイコロ TRPG dice"],
+  ["hourglass", "時間", "時間 hourglass time"],
+].map(([name, label, keywords]) => ({
+  value: `game-icons:${name}`,
+  icon: `game-icons:${name}`,
+  label,
+  keywords: `${name.replaceAll("-", " ")} ${keywords}`,
+}));
+const DEFAULT_FOLDER_ICONS = [...BUILTIN_FOLDER_ICONS, ...RPG_FOLDER_ICONS];
 const ICON_SEARCH_TRANSLATIONS = new Map([
   ["ゲーム", "game"],
   ["剣", "sword"],
@@ -61,6 +132,17 @@ const ICON_SEARCH_TRANSLATIONS = new Map([
   ["冒険", "adventure"],
   ["宇宙", "space"],
   ["車", "car"],
+  ["RPG", "fantasy"],
+  ["武器", "weapon"],
+  ["防具", "armor"],
+  ["盾", "shield"],
+  ["弓", "bow"],
+  ["杖", "staff"],
+  ["魔物", "monster"],
+  ["ドラゴン", "dragon"],
+  ["ダンジョン", "dungeon"],
+  ["宝箱", "treasure chest"],
+  ["ポーション", "potion"],
 ]);
 
 const defaultData = () => ({
@@ -104,6 +186,7 @@ const elements = {
   projectSearch: $("#projectSearch"),
   folderDialog: $("#folderDialog"),
   folderForm: $("#folderForm"),
+  newProject: $("#newProject"),
   newFolderName: $("#newFolderNameInput"),
   newFolderAliases: $("#newFolderAliasesInput"),
   renameFolderDialog: $("#renameFolderDialog"),
@@ -119,6 +202,7 @@ const elements = {
   recentFolderIconsSection: $("#recentFolderIconsSection"),
   recentFolderIcons: $("#recentFolderIcons"),
   folderIconStatus: $("#folderIconStatus"),
+  folderIconMore: $("#folderIconMore"),
   folderIconCurrent: $("#folderIconCurrent"),
   folderIconSelection: $("#folderIconSelection"),
   contextMenu: $("#treeContextMenu"),
@@ -326,7 +410,7 @@ function normalizeText(value = "") {
 }
 
 function builtinFolderIcon(value) {
-  return BUILTIN_FOLDER_ICONS.find((item) => item.value === value);
+  return DEFAULT_FOLDER_ICONS.find((item) => item.value === value);
 }
 
 function normalizeFolderIcon(value) {
@@ -1132,8 +1216,7 @@ function setAllProjectsExpanded(expanded) {
   showToast(expanded ? "すべてのフォルダーを展開しました" : "すべてのフォルダーを折りたたみました");
 }
 
-function positionFolderPopup(dialog, projectName) {
-  const anchor = folderRowByName(projectName);
+function positionAnchoredPopup(dialog, anchor) {
   if (!dialog.open || !anchor) return;
 
   const viewportPadding = 12;
@@ -1161,15 +1244,23 @@ function positionFolderPopup(dialog, projectName) {
   dialog.classList.add("is-popup-positioned");
 }
 
-function showFolderPopup(dialog, projectName, focusTarget) {
+function positionFolderPopup(dialog, projectName) {
+  positionAnchoredPopup(dialog, folderRowByName(projectName));
+}
+
+function showAnchoredPopup(dialog, anchor, focusTarget) {
   dialog.classList.remove("is-popup-positioned");
   dialog.style.removeProperty("left");
   dialog.style.removeProperty("top");
   dialog.showModal();
   requestAnimationFrame(() => {
-    positionFolderPopup(dialog, projectName);
+    positionAnchoredPopup(dialog, anchor);
     focusTarget?.focus();
   });
+}
+
+function showFolderPopup(dialog, projectName, focusTarget) {
+  showAnchoredPopup(dialog, folderRowByName(projectName), focusTarget);
 }
 
 function folderNameSuggestionCandidates(projectName) {
@@ -1390,12 +1481,13 @@ function renderFolderIconResults(items, status) {
 
 function showBuiltinFolderIcons() {
   renderFolderIconResults(
-    BUILTIN_FOLDER_ICONS,
-    "定番の絵文字です。検索すると、さらに多くのカラー絵文字が見つかります。",
+    DEFAULT_FOLDER_ICONS,
+    `定番のカラー絵文字とRPGアイコンを${DEFAULT_FOLDER_ICONS.length}種類表示しています。`,
   );
+  elements.folderIconMore.hidden = true;
 }
 
-async function searchFolderIcons(rawQuery) {
+async function searchFolderIcons(rawQuery, { showAll = false } = {}) {
   const trimmedQuery = rawQuery.trim();
   if (!trimmedQuery) {
     folderIconSearchController?.abort();
@@ -1405,10 +1497,11 @@ async function searchFolderIcons(rawQuery) {
 
   const translatedQuery = ICON_SEARCH_TRANSLATIONS.get(trimmedQuery) || trimmedQuery;
   const localQuery = normalizeText(trimmedQuery);
-  const localMatches = BUILTIN_FOLDER_ICONS.filter((item) =>
+  const localMatches = DEFAULT_FOLDER_ICONS.filter((item) =>
     normalizeText(`${item.label} ${item.keywords}`).includes(localQuery),
   );
   folderIconSearchController?.abort();
+  elements.folderIconMore.hidden = true;
   const searchController = new AbortController();
   folderIconSearchController = searchController;
   activeFolderEditorContainer().classList.add("is-searching-icons");
@@ -1417,7 +1510,8 @@ async function searchFolderIcons(rawQuery) {
   try {
     const url = new URL("https://api.iconify.design/search");
     url.searchParams.set("query", translatedQuery);
-    url.searchParams.set("limit", "96");
+    const searchLimit = showAll ? FOLDER_ICON_SEARCH_ALL_LIMIT : FOLDER_ICON_SEARCH_LIMIT;
+    url.searchParams.set("limit", String(searchLimit));
     url.searchParams.set("prefixes", COLOR_ICON_PREFIXES.join(","));
     const response = await fetch(url, { signal: searchController.signal });
     if (!response.ok) throw new Error(`Icon search failed: ${response.status}`);
@@ -1429,18 +1523,23 @@ async function searchFolderIcons(rawQuery) {
         label: value.replace(":", " · ").replaceAll("-", " "),
       }));
     const items = [...localMatches, ...remoteItems];
+    const hasMore = !showAll && remoteItems.length >= searchLimit;
+    elements.folderIconMore.hidden = !hasMore;
     renderFolderIconResults(
       items,
       items.length
-        ? `${result.total || remoteItems.length}件から上位${remoteItems.length}件を表示しています。`
+        ? hasMore
+          ? `上位${remoteItems.length}件を表示しています。さらに候補を読み込めます。`
+          : `${remoteItems.length}件の検索結果を表示しています。`
         : `「${trimmedQuery}」に一致するアイコンはありませんでした。`,
     );
   } catch (error) {
     if (error.name === "AbortError") return;
     renderFolderIconResults(
-      localMatches.length ? localMatches : BUILTIN_FOLDER_ICONS,
+      localMatches.length ? localMatches : DEFAULT_FOLDER_ICONS,
       "オンライン検索に接続できません。内蔵アイコンはそのまま選べます。",
     );
+    elements.folderIconMore.hidden = true;
   } finally {
     if (folderIconSearchController === searchController) {
       activeFolderEditorContainer().classList.remove("is-searching-icons");
@@ -1466,8 +1565,7 @@ function openFolderDialog() {
   elements.newFolderName.value = "";
   elements.newFolderAliases.value = "";
   $("#newFolderNameError").textContent = "";
-  elements.folderDialog.showModal();
-  setTimeout(() => elements.newFolderName.focus());
+  showAnchoredPopup(elements.folderDialog, elements.newProject, elements.newFolderName);
 }
 
 function openRenameFolderDialog(projectName) {
@@ -2921,6 +3019,9 @@ $("#folderForm").addEventListener("submit", (event) => {
 $("#folderForm").querySelectorAll(".close-button, .secondary-button").forEach((button) => {
   button.addEventListener("click", () => elements.folderDialog.close());
 });
+elements.folderDialog.addEventListener("click", (event) => {
+  if (event.target === elements.folderDialog) elements.folderDialog.close();
+});
 elements.newFolderName.addEventListener("input", () => {
   $("#newFolderNameError").textContent = "";
 });
@@ -3002,6 +3103,9 @@ elements.folderIconSearch.addEventListener("keydown", (event) => {
     $("[data-folder-icon]", elements.folderIconResults)?.focus();
   }
 });
+elements.folderIconMore.addEventListener("click", () => {
+  searchFolderIcons(elements.folderIconSearch.value, { showAll: true });
+});
 elements.folderIconDialog.addEventListener("click", (event) => {
   if (event.target === elements.folderIconDialog) {
     elements.folderIconDialog.close();
@@ -3062,6 +3166,9 @@ elements.renameFolderDialog.addEventListener("click", (event) => {
   if (event.target === elements.renameFolderDialog) elements.renameFolderDialog.close();
 });
 window.addEventListener("resize", () => {
+  if (elements.folderDialog.open) {
+    positionAnchoredPopup(elements.folderDialog, elements.newProject);
+  }
   if (elements.renameFolderDialog.open && editingFolderOriginalName) {
     positionFolderPopup(elements.renameFolderDialog, editingFolderOriginalName);
   }

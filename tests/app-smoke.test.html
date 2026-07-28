@@ -105,8 +105,9 @@
           ),
         ],
         [
-          "新規作成モーダルは作成に必要な項目だけを表示する",
+          "新規作成は画面に重なるアンカー付きポップアップで開く",
           appDocument.querySelector("#folderDialog")?.open &&
+            appDocument.querySelector("#folderDialog")?.classList.contains("folder-popup-dialog") &&
             Boolean(appDocument.querySelector("#newFolderNameInput")) &&
             !appDocument.querySelector("#folderDialog .folder-icon-picker"),
         ],

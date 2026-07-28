@@ -343,8 +343,8 @@
       </form>
     </dialog>
 
-    <dialog class="sheet-dialog folder-dialog" id="folderDialog">
-      <form method="dialog" class="sheet" id="folderForm">
+    <dialog class="sheet-dialog folder-dialog folder-popup-dialog folder-create-dialog" id="folderDialog">
+      <form method="dialog" class="sheet folder-popup-card" id="folderForm">
         <div class="sheet-head">
           <div>
             <span class="folder-editor-eyebrow">ライブラリを整理</span>
@@ -492,6 +492,14 @@
             aria-label="フォルダーアイコン候補"
           ></div>
           <small class="folder-icon-status" id="folderIconStatus" aria-live="polite"></small>
+          <button class="folder-icon-more" id="folderIconMore" type="button" hidden>
+            さらに候補を読み込む
+          </button>
+          <small class="folder-icon-credit">
+            RPG icons:
+            <a href="https://game-icons.net/" target="_blank" rel="noreferrer">Game Icons</a>
+            (CC BY 3.0)
+          </small>
         </fieldset>
         <div class="sheet-actions">
           <button class="secondary-button" value="cancel" type="button">キャンセル</button>
