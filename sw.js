@@ -1,4 +1,4 @@
-const CACHE_NAME = "curat-shell-v23";
+const CACHE_NAME = "curat-shell-v25";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const APP_SHELL = [
   "./folder-order.js",
   "./folder-display.js",
   "./app.js",
+  "./data-store.js",
   "./cloud-sync.js",
   "./firebase-config.js",
   "./firebase-database-rules.json",

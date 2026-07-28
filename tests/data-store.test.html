@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<script type="module">
+  try {
+    const { DataStore } = await import("../data-store.js");
+    const store = new DataStore({ dbName: "curat-data-store-test-v1" });
+    const source = {
+      version: 1,
+      updatedAt: "2026-07-28T00:00:00.000Z",
+      series: [{ id: "restored-playlist" }],
+      projects: [{ name: "復元テスト" }],
+      playlistOrder: ["restored-playlist"],
+    };
+
+    await store.save(source);
+    source.series.length = 0;
+    const restored = await store.load();
+    const passed =
+      restored?.series?.[0]?.id === "restored-playlist" &&
+      restored?.projects?.[0]?.name === "復元テスト";
+    document.querySelector("#result").textContent = passed
+      ? "PASS restored data survives a fresh store read"
+      : `FAIL restored=${JSON.stringify(restored)}`;
+    document.title = passed ? "PASS" : "FAIL";
+  } catch (error) {
+    document.querySelector("#result").textContent = `FAIL ${error.message}`;
+    document.title = "FAIL";
+  }
+</script>

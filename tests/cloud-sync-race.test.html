@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<script type="module">
+  try {
+    const { CloudSync } = await import("../cloud-sync.js");
+    const statuses = [];
+    const writes = [];
+    let releaseFirstWrite;
+    const firstWriteGate = new Promise((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+    const sync = new CloudSync({
+      getLocalData: () => ({}),
+      onRemoteData: () => {},
+      onStatus: (status) => statuses.push(status.phase),
+    });
+    sync.user = { email: "test@example.com" };
+    sync.dataRef = {};
+    sync.modules = {
+      serverTimestamp: () => 1,
+      set: async (_reference, payload) => {
+        writes.push(payload.data);
+        if (writes.length === 1) await firstWriteGate;
+      },
+    };
+
+    const initialUpload = sync.upload({
+      version: 1,
+      updatedAt: "2026-07-28T00:00:00.000Z",
+      series: [],
+    }, 0);
+    while (writes.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    sync.queue({
+      version: 1,
+      updatedAt: "2026-07-28T00:00:01.000Z",
+      series: [{ id: "restored-playlist" }],
+    });
+    releaseFirstWrite();
+    await initialUpload;
+    const statusAfterOldWrite = sync.state.phase;
+    await new Promise((resolve) => setTimeout(resolve, 550));
+    await sync.uploadChain;
+
+    const passed =
+      statusAfterOldWrite === "syncing" &&
+      sync.state.phase === "synced" &&
+      writes.length === 2 &&
+      writes[1].series?.[0]?.id === "restored-playlist";
+    document.querySelector("#result").textContent = passed
+      ? "PASS sync stays pending until restored data is uploaded"
+      : `FAIL old=${statusAfterOldWrite} final=${sync.state.phase} writes=${JSON.stringify(writes)} statuses=${statuses.join(",")}`;
+    document.title = passed ? "PASS" : "FAIL";
+  } catch (error) {
+    document.querySelector("#result").textContent = `FAIL ${error.message}`;
+    document.title = "FAIL";
+  }
+</script>

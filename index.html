@@ -2,8 +2,15 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <meta name="theme-color" content="#0d203b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Curat" />
     <meta
       name="description"
       content="YouTube のゲーム実況プレイリストを、動画ごとの視聴進捗とともに管理する静的 Web アプリ。"
@@ -101,6 +108,9 @@
             <span><b id="projectCount">0</b> フォルダー</span>
             <span><b id="playlistTreeCount">0</b> プレイリスト</span>
           </div>
+          <p class="touch-gesture-hint">
+            タップで開く · 長押しでメニュー · <svg class="icon" aria-hidden="true"><use href="#icon-grip"></use></svg>をスライドして並べ替え
+          </p>
           <div
             class="project-tree"
             id="projectTree"
@@ -367,7 +377,7 @@
         </label>
         <div class="info-box">
           <strong>アイコンは作成後に選べます</strong>
-          <p>フォルダーを作成したあと、右クリックメニューの「アイコンを変更」から絵文字を設定できます。</p>
+          <p>フォルダーを作成したあと、操作メニューの「アイコンを変更」から絵文字を設定できます。iPad ではフォルダーを長押しして開けます。</p>
         </div>
         <div class="sheet-actions">
           <button class="secondary-button" value="cancel" type="button">キャンセル</button>

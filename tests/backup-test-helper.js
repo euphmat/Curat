@@ -11,6 +11,7 @@ async function waitForCuratTest(check, timeout = 2000) {
 async function loadCuratTestData(frame, data) {
   const appWindow = frame.contentWindow;
   const appDocument = frame.contentDocument;
+  appWindow.confirm = () => true;
   const input = appDocument.querySelector("#restoreInput");
   const transfer = new appWindow.DataTransfer();
   const payload = {

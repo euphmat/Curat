@@ -1,4 +1,5 @@
 import { CloudSync } from "./cloud-sync.js";
+import { dataStore } from "./data-store.js";
 
 const APP_VERSION = 1;
 const API_BASE = "https://www.googleapis.com/youtube/v3";
@@ -8,6 +9,8 @@ const RECENT_FOLDER_ICONS_LIMIT = 6;
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 480;
 const RECENT_IMPORT_CORRECTION_MS = 5 * 60 * 1000;
+const TOUCH_LONG_PRESS_MS = 560;
+const TOUCH_MOVE_THRESHOLD = 10;
 const {
   parseEpisodeOrder,
   sortPlaylistTasks,
@@ -153,6 +156,8 @@ let suppressPlaylistClickUntil = 0;
 let draggedTaskId = null;
 let activeDropTaskRow = null;
 let activeTaskDropPlacement = "";
+let touchReorderGesture = null;
+let treeLongPressGesture = null;
 let detailReturnFocus = null;
 let editingFolderOriginalName = null;
 let selectedFolderIcon = "";
@@ -281,8 +286,14 @@ function saveData({ syncCloud = true, touchUpdatedAt = true } = {}) {
     }
   }
   if (touchUpdatedAt) data.updatedAt = new Date().toISOString();
+  const localSave = dataStore.save(data);
+  localSave.catch((error) => {
+    console.warn("端末へのデータ保存に失敗しました", error);
+    showToast("端末へのデータ保存に失敗しました", true);
+  });
   if (syncCloud && !applyingCloudData) cloudSync.queue(data);
   updateBackupUI();
+  return localSave;
 }
 
 function exportPayload() {
@@ -628,6 +639,13 @@ function renderProjectTree() {
                       <span class="playlist-title">${escapeHtml(channelName)}</span>
                       <span class="playlist-progress">${stats.progress}%</span>
                     </button>
+                    <button
+                      class="playlist-drag-handle"
+                      type="button"
+                      data-touch-drag-series="${escapeHtml(series.id)}"
+                      aria-label="「${escapeHtml(channelName)}」をスライドして並べ替え"
+                      title="スライドして並べ替え"
+                    >${icon("grip")}</button>
                     <button
                       class="tree-context-trigger"
                       type="button"
@@ -1709,17 +1727,28 @@ function handleProjectDrop(event) {
     event.dataTransfer.getData("application/x-playlog-series") ||
     event.dataTransfer.getData("text/plain") ||
     draggedSeriesId;
-  const series = data.series.find((item) => item.id === seriesId);
   const targetPlaylist = playlistButtonFromDropTarget(event.target);
-  const currentProject = (series?.project || series?.title || "").trim();
+  event.preventDefault();
+  completePlaylistDrop(
+    seriesId,
+    group,
+    targetPlaylist,
+    activePlaylistDropPlacement || "before",
+  );
+}
+
+function completePlaylistDrop(seriesId, group, targetPlaylist, placement = "before") {
+  const series = data.series.find((item) => item.id === seriesId);
+  if (!series || !group) {
+    clearPlaylistDragState();
+    return false;
+  }
+  const currentProject = (series.project || series.title || "").trim();
   const isPlaylistDrop =
-    series &&
     targetPlaylist &&
     targetPlaylist.dataset.projectSeries !== seriesId;
 
   if (isPlaylistDrop) {
-    event.preventDefault();
-    const placement = activePlaylistDropPlacement || "before";
     const normalizedOrder = normalizePlaylistOrder(data.series, data.playlistOrder);
     const renderedIds = new Set(
       $$("[data-project-series]", elements.projectTree).map(
@@ -1737,18 +1766,17 @@ function handleProjectDrop(event) {
     clearPlaylistDragState();
     if (currentProject !== group.dataset.dropProject) {
       moveSeriesToProject(seriesId, group.dataset.dropProject);
-      return;
+      return true;
     }
     saveData();
     render();
     showToast("プレイリストの並び順を保存しました");
-    return;
+    return true;
   }
 
-  event.preventDefault();
   const projectName = group.dataset.dropProject;
   clearPlaylistDragState();
-  moveSeriesToProject(seriesId, projectName);
+  return moveSeriesToProject(seriesId, projectName);
 }
 
 function taskRowHtml(task, index) {
@@ -1877,6 +1905,221 @@ function handleTaskDrop(event) {
   if (reorderTaskInSeries(series, taskId, targetId, placement)) {
     showToast("エピソードの並び順を保存しました");
   }
+}
+
+function isTouchLikePointer(event) {
+  return event.isPrimary && (event.pointerType === "touch" || event.pointerType === "pen");
+}
+
+function pointerDistance(gesture, event) {
+  return Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY);
+}
+
+function autoScrollTouchContainer(container, clientY) {
+  if (!container) return;
+  const rect = container.getBoundingClientRect();
+  const edge = Math.min(64, rect.height * 0.18);
+  if (clientY < rect.top + edge) {
+    container.scrollBy({ top: -18, behavior: "auto" });
+  } else if (clientY > rect.bottom - edge) {
+    container.scrollBy({ top: 18, behavior: "auto" });
+  }
+}
+
+function beginTouchReorder(event, kind, id, handle) {
+  if (!isTouchLikePointer(event)) return;
+  event.preventDefault();
+  closeTreeContextMenu();
+  touchReorderGesture = {
+    kind,
+    id,
+    handle,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    activated: false,
+  };
+  try {
+    handle.setPointerCapture?.(event.pointerId);
+  } catch {
+    // Some embedded WebViews expose Pointer Events without pointer capture.
+  }
+}
+
+function activateTouchReorder(gesture) {
+  gesture.activated = true;
+  gesture.handle.classList.add("is-touch-dragging");
+  if (gesture.kind === "playlist") {
+    draggedSeriesId = gesture.id;
+    suppressPlaylistClickUntil = Date.now() + 700;
+    gesture.handle
+      .closest(".project-playlist-row")
+      ?.querySelector("[data-project-series]")
+      ?.classList.add("is-dragging");
+    document.body.classList.add("is-dragging-playlist", "is-touch-reordering");
+  } else {
+    draggedTaskId = gesture.id;
+    gesture.handle.closest(".task-row")?.classList.add("is-task-dragging");
+    document.body.classList.add("is-dragging-task", "is-touch-reordering");
+  }
+}
+
+function updateTouchPlaylistDrop(clientX, clientY) {
+  const target = document.elementFromPoint(clientX, clientY);
+  const group = target?.closest?.("[data-drop-project]");
+  if (!group) {
+    setActiveDropProject(null);
+    setActiveDropPlaylist(null);
+    return;
+  }
+  const targetPlaylist = playlistButtonFromDropTarget(target);
+  if (targetPlaylist && targetPlaylist.dataset.projectSeries !== draggedSeriesId) {
+    const targetRow = targetPlaylist.closest(".project-playlist-row");
+    const rect = targetRow.getBoundingClientRect();
+    setActiveDropProject(null);
+    setActiveDropPlaylist(
+      targetRow,
+      clientY < rect.top + rect.height / 2 ? "before" : "after",
+    );
+    return;
+  }
+  const series = data.series.find((item) => item.id === draggedSeriesId);
+  const currentProject = (series?.project || series?.title || "").trim();
+  setActiveDropPlaylist(null);
+  setActiveDropProject(currentProject === group.dataset.dropProject ? null : group);
+}
+
+function updateTouchTaskDrop(clientX, clientY) {
+  const target = document.elementFromPoint(clientX, clientY);
+  const row = target?.closest?.(".task-row");
+  if (!row || row.dataset.taskId === draggedTaskId) {
+    setActiveDropTask(null);
+    return;
+  }
+  const rect = row.getBoundingClientRect();
+  setActiveDropTask(
+    row,
+    clientY < rect.top + rect.height / 2 ? "before" : "after",
+  );
+}
+
+function handleTouchReorderMove(event) {
+  const gesture = touchReorderGesture;
+  if (!gesture || event.pointerId !== gesture.pointerId) return;
+  event.preventDefault();
+  if (!gesture.activated) {
+    if (pointerDistance(gesture, event) < TOUCH_MOVE_THRESHOLD) return;
+    activateTouchReorder(gesture);
+  }
+  if (gesture.kind === "playlist") {
+    updateTouchPlaylistDrop(event.clientX, event.clientY);
+    autoScrollTouchContainer(elements.projectTree, event.clientY);
+  } else {
+    updateTouchTaskDrop(event.clientX, event.clientY);
+    autoScrollTouchContainer(elements.detailView, event.clientY);
+  }
+}
+
+function finishTouchReorder(event, { cancelled = false } = {}) {
+  const gesture = touchReorderGesture;
+  if (!gesture || event.pointerId !== gesture.pointerId) return;
+  touchReorderGesture = null;
+  gesture.handle.classList.remove("is-touch-dragging");
+  try {
+    gesture.handle.releasePointerCapture?.(event.pointerId);
+  } catch {
+    // The pointer may already have been released by iPadOS.
+  }
+  document.body.classList.remove("is-touch-reordering");
+  if (!gesture.activated || cancelled) {
+    if (gesture.kind === "playlist") clearPlaylistDragState();
+    else clearTaskDragState();
+    return;
+  }
+
+  event.preventDefault();
+  if (gesture.kind === "playlist") {
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const group = target?.closest?.("[data-drop-project]") || activeDropProject;
+    const targetPlaylist =
+      playlistButtonFromDropTarget(target) ||
+      activeDropPlaylistRow?.querySelector("[data-project-series]");
+    completePlaylistDrop(
+      gesture.id,
+      group,
+      targetPlaylist,
+      activePlaylistDropPlacement || "before",
+    );
+    return;
+  }
+
+  const target = document.elementFromPoint(event.clientX, event.clientY);
+  const row = target?.closest?.(".task-row") || activeDropTaskRow;
+  const series = data.series.find((item) => item.id === detailSeriesId);
+  const placement = activeTaskDropPlacement || "before";
+  clearTaskDragState();
+  if (
+    row &&
+    series &&
+    row.dataset.taskId !== gesture.id &&
+    reorderTaskInSeries(series, gesture.id, row.dataset.taskId, placement)
+  ) {
+    showToast("エピソードの並び順を保存しました");
+  }
+}
+
+function clearTreeLongPress() {
+  if (!treeLongPressGesture) return;
+  clearTimeout(treeLongPressGesture.timer);
+  treeLongPressGesture.target?.classList.remove("is-holding");
+  treeLongPressGesture = null;
+}
+
+function beginTreeLongPress(event) {
+  if (
+    !isTouchLikePointer(event) ||
+    event.target.closest("[data-context-kind], [data-touch-drag-series]")
+  ) {
+    return;
+  }
+  const playlist = event.target.closest("[data-project-series]");
+  const folder = event.target.closest("[data-tree-folder]");
+  const target = playlist || folder;
+  if (!target) return;
+
+  clearTreeLongPress();
+  const gesture = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    target,
+    kind: playlist ? "playlist" : "folder",
+    id: playlist?.dataset.projectSeries || folder.dataset.treeFolder,
+    timer: 0,
+  };
+  gesture.timer = window.setTimeout(() => {
+    if (treeLongPressGesture !== gesture) return;
+    target.classList.remove("is-holding");
+    suppressPlaylistClickUntil = Date.now() + 800;
+    openTreeContextMenu(gesture.kind, gesture.id, gesture.clientX, gesture.clientY);
+    treeLongPressGesture = null;
+  }, TOUCH_LONG_PRESS_MS);
+  treeLongPressGesture = gesture;
+  target.classList.add("is-holding");
+}
+
+function moveTreeLongPress(event) {
+  const gesture = treeLongPressGesture;
+  if (!gesture || event.pointerId !== gesture.pointerId) return;
+  gesture.clientX = event.clientX;
+  gesture.clientY = event.clientY;
+  if (pointerDistance(gesture, event) > TOUCH_MOVE_THRESHOLD) clearTreeLongPress();
+}
+
+function endTreeLongPress(event) {
+  if (treeLongPressGesture?.pointerId === event.pointerId) clearTreeLongPress();
 }
 
 function updateTask(seriesId, taskId, nextStatus) {
@@ -2069,7 +2312,7 @@ async function restoreBackup(file) {
     const count = payload.data.series.length;
     if (data.series.length && !window.confirm(`現在のデータを置き換え、${count} 件のプレイリストを復元しますか？`)) return;
     data = migrateData(payload.data);
-    saveData();
+    await saveData();
     render();
     showToast(`${count} 件のプレイリストを復元しました`);
     elements.settingsDialog.close();
@@ -2109,12 +2352,12 @@ function updateBackupUI() {
     elements.saveStatusCopy.textContent = cloudState.error;
   } else if (cloudState.phase === "signed-out") {
     elements.backupStatus.textContent = "ログインが必要";
-    elements.saveStatusTitle.textContent = "クラウド同期は停止中";
-    elements.saveStatusCopy.textContent = "ログインするまで変更は端末に保存されません。";
+    elements.saveStatusTitle.textContent = "この端末に保存中";
+    elements.saveStatusCopy.textContent = "ログインすると他の端末とも同期できます。";
   } else {
     elements.backupStatus.textContent = "Firebase 未設定";
-    elements.saveStatusTitle.textContent = "クラウド保存を利用できません";
-    elements.saveStatusCopy.textContent = "firebase-config.js を設定してください。";
+    elements.saveStatusTitle.textContent = "この端末に保存中";
+    elements.saveStatusCopy.textContent = "Firebase を設定すると他の端末とも同期できます。";
   }
 }
 
@@ -2190,6 +2433,10 @@ elements.detailContent.addEventListener("click", async (event) => {
 elements.detailContent.addEventListener("dragstart", handleTaskDragStart);
 elements.detailContent.addEventListener("dragover", handleTaskDragOver);
 elements.detailContent.addEventListener("drop", handleTaskDrop);
+elements.detailContent.addEventListener("pointerdown", (event) => {
+  const handle = event.target.closest("[data-drag-task]");
+  if (handle) beginTouchReorder(event, "task", handle.dataset.dragTask, handle);
+});
 elements.detailContent.addEventListener("dragleave", (event) => {
   if (!elements.detailContent.contains(event.relatedTarget)) setActiveDropTask(null);
 });
@@ -2316,6 +2563,7 @@ elements.projectTree.addEventListener("click", (event) => {
 });
 
 elements.projectTree.addEventListener("contextmenu", (event) => {
+  clearTreeLongPress();
   const playlist = event.target.closest("[data-project-series]");
   const folder = event.target.closest("[data-tree-folder]");
   event.preventDefault();
@@ -2326,6 +2574,20 @@ elements.projectTree.addEventListener("contextmenu", (event) => {
   } else {
     openTreeContextMenu("workspace", "", event.clientX, event.clientY);
   }
+});
+elements.projectTree.addEventListener("pointerdown", (event) => {
+  const dragHandle = event.target.closest("[data-touch-drag-series]");
+  if (dragHandle) {
+    clearTreeLongPress();
+    beginTouchReorder(
+      event,
+      "playlist",
+      dragHandle.dataset.touchDragSeries,
+      dragHandle,
+    );
+    return;
+  }
+  beginTreeLongPress(event);
 });
 
 elements.projectTree.addEventListener("keydown", (event) => {
@@ -2407,6 +2669,18 @@ document.addEventListener("dragend", () => {
   suppressPlaylistClickUntil = Date.now() + 250;
   clearPlaylistDragState();
   clearTaskDragState();
+});
+document.addEventListener("pointermove", (event) => {
+  handleTouchReorderMove(event);
+  moveTreeLongPress(event);
+}, { passive: false });
+document.addEventListener("pointerup", (event) => {
+  finishTouchReorder(event);
+  endTreeLongPress(event);
+});
+document.addEventListener("pointercancel", (event) => {
+  finishTouchReorder(event, { cancelled: true });
+  endTreeLongPress(event);
 });
 
 $("#newProject").addEventListener("click", () => openFolderDialog());
@@ -2679,20 +2953,34 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
 }
 
-render();
-cloudSync.start();
+async function startApp() {
+  try {
+    const savedData = await dataStore.load();
+    if (savedData && Array.isArray(savedData.series)) {
+      data = migrateData(savedData);
+    }
+  } catch (error) {
+    console.warn("端末の保存データを読み込めませんでした", error);
+  }
 
-const initialSeriesId = location.hash.startsWith("#series=")
-  ? decodeURIComponent(location.hash.slice("#series=".length))
-  : "";
-if (initialSeriesId && data.series.some((series) => series.id === initialSeriesId)) {
-  openSeries(initialSeriesId);
-} else {
-  const firstSeries =
-    data.series.find((series) => series.id === data.playlistOrder[0]) || data.series[0];
-  if (firstSeries) openSeries(firstSeries.id);
+  render();
+  cloudSync.start();
+
+  const initialSeriesId = location.hash.startsWith("#series=")
+    ? decodeURIComponent(location.hash.slice("#series=".length))
+    : "";
+  if (initialSeriesId && data.series.some((series) => series.id === initialSeriesId)) {
+    openSeries(initialSeriesId);
+  } else {
+    const firstSeries =
+      data.series.find((series) => series.id === data.playlistOrder[0]) || data.series[0];
+    if (firstSeries) openSeries(firstSeries.id);
+  }
 }
+
+startApp();

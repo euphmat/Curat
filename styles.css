@@ -6350,3 +6350,318 @@ body.detail-pinned .task-state-button {
     width: 100%;
   }
 }
+
+/* iPad and direct-touch interaction */
+.touch-gesture-hint,
+.playlist-drag-handle {
+  display: none;
+}
+
+.playlist-drag-handle {
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 42px;
+  padding: 0;
+  color: #8f86a4;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.playlist-drag-handle .icon {
+  width: 15px;
+  height: 20px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.playlist-drag-handle.is-touch-dragging,
+.task-drag-handle.is-touch-dragging {
+  color: #171029;
+  background: linear-gradient(135deg, #e6c8ff, #85e9f5);
+  cursor: grabbing;
+}
+
+.project-row.is-holding,
+.project-playlist.is-holding {
+  color: #fff;
+  background: rgba(143, 111, 218, 0.3);
+  box-shadow: inset 3px 0 var(--sky);
+}
+
+body.is-touch-reordering {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (hover: none), (pointer: coarse) {
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+
+  button,
+  a,
+  [role="treeitem"] {
+    touch-action: manipulation;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  .touch-gesture-hint {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 7px 10px;
+    color: #8f87a3;
+    font-size: 10px;
+    font-weight: 750;
+    line-height: 1.4;
+    background: rgba(126, 99, 187, 0.08);
+    border-bottom: 1px solid rgba(190, 173, 255, 0.12);
+  }
+
+  .touch-gesture-hint .icon {
+    flex: 0 0 auto;
+    width: 12px;
+    height: 14px;
+    fill: currentColor;
+    stroke: none;
+  }
+
+  .project-tree,
+  .workspace,
+  .sheet-dialog {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .project-tree {
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .project-row,
+  .project-playlist {
+    min-height: 50px;
+    -webkit-touch-callout: none;
+  }
+
+  .project-row {
+    grid-template-columns: 36px 24px minmax(0, 1fr) auto auto 42px;
+    gap: 5px;
+  }
+
+  .tree-chevron {
+    width: 36px;
+    height: 44px;
+  }
+
+  .project-playlist-row .tree-context-trigger,
+  .project-row .tree-context-trigger {
+    width: 42px;
+    height: 44px;
+    visibility: visible;
+  }
+
+  .playlist-drag-handle {
+    display: grid;
+    flex-basis: 42px;
+    width: 42px;
+    height: 44px;
+  }
+
+  .explorer-actions button,
+  .icon-button,
+  .delete-all-button,
+  .close-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .task-drag-handle {
+    width: 34px;
+    min-width: 34px;
+  }
+
+  .workspace .task-row {
+    grid-template:
+      "drag thumb copy check" auto
+      "drag thumb state check" auto
+      / 34px 104px minmax(0, 1fr) 44px;
+    min-height: 96px;
+  }
+
+  .workspace .task-thumb {
+    width: 104px;
+  }
+
+  .task-check {
+    width: 44px;
+    height: 44px;
+  }
+
+  .task-state-button,
+  body.detail-pinned .task-state-button {
+    min-height: 32px;
+    padding-inline: 11px;
+  }
+
+  .context-menu-item {
+    min-height: 48px;
+    font-size: 14px;
+  }
+
+  .tree-context-menu {
+    width: min(290px, calc(100vw - 24px));
+    max-height: calc(100dvh - 24px);
+    border-radius: 13px;
+  }
+
+  .sheet-dialog {
+    max-height: calc(100dvh - 24px);
+    overscroll-behavior: contain;
+  }
+
+  .sidebar {
+    padding-top: max(22px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+  }
+
+  .topbar {
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-right: max(clamp(18px, 2.6vw, 40px), env(safe-area-inset-right));
+  }
+
+  .workspace {
+    padding-right: max(clamp(18px, 2.7vw, 38px), env(safe-area-inset-right));
+    padding-bottom: max(clamp(18px, 2.7vw, 38px), env(safe-area-inset-bottom));
+  }
+}
+
+/* Keep a true two-pane workspace in iPad portrait and landscape. */
+@media (min-width: 700px) and (max-width: 1180px) and (hover: none),
+  (min-width: 700px) and (max-width: 1180px) and (pointer: coarse) {
+  :root {
+    --sidebar-width: clamp(272px, 35vw, 340px);
+  }
+
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .app-shell {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .sidebar {
+    position: relative;
+    left: auto;
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    transform: none;
+    transition: none;
+  }
+
+  .sidebar-resizer,
+  .sidebar-scrim {
+    display: none;
+  }
+
+  .main {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding-inline: 14px;
+  }
+
+  .topbar-title {
+    grid-column: 1;
+  }
+
+  .topbar-actions {
+    grid-column: 2;
+  }
+
+  .header-add-form {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+
+  .workspace {
+    padding: 16px;
+  }
+
+  .workspace .detail-hero {
+    grid-template-columns: 112px minmax(0, 1fr);
+    min-height: 146px;
+    padding: 16px;
+  }
+
+  .workspace .detail-cover-wrap {
+    width: 112px;
+  }
+
+  .workspace .detail-hero-copy {
+    padding-left: 16px;
+  }
+
+  .workspace .detail-hero-copy h2 {
+    font-size: clamp(18px, 2.5vw, 24px);
+  }
+
+  .workspace .detail-main {
+    padding-inline: 12px;
+  }
+
+  .workspace .detail-toolbar {
+    margin-inline: -12px;
+    padding-inline: 12px;
+  }
+
+  .workspace .task-row {
+    grid-template:
+      "drag thumb copy check" auto
+      "drag thumb state check" auto
+      / 32px 88px minmax(0, 1fr) 44px;
+    gap: 6px 9px;
+    padding: 9px;
+  }
+
+  .workspace .task-thumb {
+    width: 88px;
+  }
+}
+
+@media (max-width: 850px) and (hover: none),
+  (max-width: 850px) and (pointer: coarse) {
+  .project-progress {
+    display: none;
+  }
+
+  .project-row {
+    grid-template-columns: 36px 24px minmax(0, 1fr) auto 42px;
+  }
+}
