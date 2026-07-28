@@ -41,6 +41,9 @@ const {
 const { compareFolderNames } = window.CuratFolderOrder;
 const {
   buildRecommendationProfile,
+  isRecommendationDismissed,
+  recommendationChannelKey,
+  recommendationGameKey,
   recommendationType,
   rankRecommendationCandidates,
 } = window.CuratRecommendations;
@@ -161,6 +164,10 @@ const defaultData = () => ({
   series: [],
   projects: [],
   playlistOrder: [],
+  recommendationDismissals: {
+    games: [],
+    channels: [],
+  },
 });
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -309,8 +316,13 @@ const cloudSync = new CloudSync({
           ? remoteData.playlistOrder
           : [],
       });
+      recommendationCandidates = recommendationCandidates.filter(
+        (candidate) =>
+          !isRecommendationDismissed(candidate, data.recommendationDismissals),
+      );
       saveData({ syncCloud: false, touchUpdatedAt: false });
       render();
+      if (elements.recommendationDialog.open) renderRecommendationResults();
       if (openSeriesId && data.series.some((series) => series.id === openSeriesId)) {
         openSeries(openSeriesId);
       } else if (data.series[0]) {
@@ -376,6 +388,9 @@ function migrateData(saved) {
     version: APP_VERSION,
     series: migratedSeries,
     playlistOrder: normalizePlaylistOrder(migratedSeries, saved.playlistOrder),
+    recommendationDismissals: normalizeRecommendationDismissals(
+      saved.recommendationDismissals,
+    ),
     projects: [
       ...savedProjects.map((project) => ({
         name: project.name,
@@ -385,6 +400,21 @@ function migrateData(saved) {
       })),
       ...derivedProjects,
     ],
+  };
+}
+
+function normalizeRecommendationDismissals(value = {}) {
+  const uniqueKeys = (keys) =>
+    [
+      ...new Set(
+        (Array.isArray(keys) ? keys : [])
+          .map((key) => String(key || "").trim())
+          .filter(Boolean),
+      ),
+    ].slice(-500);
+  return {
+    games: uniqueKeys(value.games),
+    channels: uniqueKeys(value.channels),
   };
 }
 
@@ -791,11 +821,19 @@ async function fetchJson(path, params) {
 }
 
 function recommendationDataSignature() {
-  return data.series
+  const seriesSignature = data.series
     .map((series) => series.id)
     .filter(Boolean)
     .sort()
     .join("|");
+  const dismissals = normalizeRecommendationDismissals(
+    data.recommendationDismissals,
+  );
+  return [
+    seriesSignature,
+    dismissals.games.slice().sort().join("|"),
+    dismissals.channels.slice().sort().join("|"),
+  ].join("::");
 }
 
 function recommendationCandidateFromResource(resource, sourceProjectName = "") {
@@ -904,6 +942,21 @@ function recommendationCardHtml(candidate) {
         </div>
       </div>
       <div class="recommendation-actions">
+        <button
+          class="recommendation-dismiss-button"
+          type="button"
+          data-recommendation-action="dismiss-game"
+          aria-label="「${escapeHtml(candidate.matchedProjectName || candidate.title)}」を今後表示しない"
+          title="もうこのゲームは表示しない"
+        >${icon("eye-off")}</button>
+        <button
+          class="recommendation-dismiss-button"
+          type="button"
+          data-recommendation-action="dismiss-channel"
+          aria-label="「${escapeHtml(candidate.channelTitle || "このチャンネル")}」を今後表示しない"
+          title="もうこのチャンネルは表示しない"
+          ${recommendationChannelKey(candidate) ? "" : "disabled"}
+        >${icon("user-x")}</button>
         <a
           class="recommendation-youtube-link"
           href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
@@ -1136,6 +1189,7 @@ async function loadRecommendations() {
       ),
       profile,
       RECOMMENDATION_RESULT_LIMIT,
+      data.recommendationDismissals,
     );
     recommendationLastUpdatedAt = new Date().toISOString();
     recommendationSourceSignature = recommendationDataSignature();
@@ -3271,8 +3325,40 @@ elements.recommendationDialog.addEventListener("click", (event) => {
   }
 });
 elements.recommendationResults.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-recommendation-action='add']");
+  const button = event.target.closest("[data-recommendation-action]");
   if (!button || button.disabled) return;
+  const action = button.dataset.recommendationAction;
+  if (action === "dismiss-game" || action === "dismiss-channel") {
+    const card = button.closest("[data-recommendation-id]");
+    const candidate = recommendationCandidates.find(
+      (item) => item.id === card?.dataset.recommendationId,
+    );
+    if (!candidate) return;
+    const kind = action === "dismiss-game" ? "games" : "channels";
+    const key =
+      kind === "games"
+        ? recommendationGameKey(candidate)
+        : recommendationChannelKey(candidate);
+    if (!key) return;
+    data.recommendationDismissals = normalizeRecommendationDismissals({
+      ...data.recommendationDismissals,
+      [kind]: [...(data.recommendationDismissals?.[kind] || []), key],
+    });
+    recommendationCandidates = recommendationCandidates.filter(
+      (item) =>
+        !isRecommendationDismissed(item, data.recommendationDismissals),
+    );
+    saveData();
+    recommendationSourceSignature = recommendationDataSignature();
+    renderRecommendationResults();
+    showToast(
+      kind === "games"
+        ? "このゲームをおすすめに表示しないようにしました"
+        : "このチャンネルをおすすめに表示しないようにしました",
+    );
+    return;
+  }
+  if (action !== "add") return;
   const playlistId = button.dataset.playlistId;
   if (!playlistId) return;
   button.disabled = true;

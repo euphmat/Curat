@@ -6,6 +6,8 @@
 <script>
   const {
     buildRecommendationProfile,
+    recommendationChannelKey,
+    recommendationGameKey,
     rankRecommendationCandidates,
     scoreRecommendationCandidate,
   } = window.CuratRecommendations;
@@ -74,6 +76,22 @@
     todoRanked.find((item) => item.id === "same-channel").recommendationType,
     "new-game",
     "登録済み投稿者の未登録ゲームを新しいゲームに分類する",
+  );
+  equal(
+    recommendationGameKey(todoRanked.find((item) => item.id === "same-channel")) ===
+      recommendationGameKey({
+        title: "新作ゲーム 実況プレイ Part 2",
+        channelTitle: "実況者A",
+      }),
+    true,
+    "実況表記やPart番号が違っても同じ新しいゲームとして識別する",
+  );
+  equal(
+    recommendationChannelKey(
+      todoRanked.find((item) => item.id === "same-channel"),
+    ),
+    "id:channel-a",
+    "チャンネルIDを除外用の識別子にする",
   );
   equal(
     scoreRecommendationCandidate(
@@ -180,6 +198,33 @@
     new Set(allTabsRanked.map((item) => item.recommendationType)).size,
     3,
     "候補がある場合は3タブすべての項目を結果に残す",
+  );
+
+  const dismissedGameKey = recommendationGameKey(
+    todoRanked.find((item) => item.id === "same-project"),
+  );
+  const withoutDismissedGame = rankRecommendationCandidates(
+    candidates,
+    todoProfile,
+    12,
+    { games: [dismissedGameKey], channels: [] },
+  );
+  equal(
+    withoutDismissedGame.some((item) => item.id === "same-project"),
+    false,
+    "表示しないゲームを候補から除外する",
+  );
+
+  const withoutDismissedChannel = rankRecommendationCandidates(
+    candidates,
+    todoProfile,
+    12,
+    { games: [], channels: ["id:channel-a"] },
+  );
+  equal(
+    withoutDismissedChannel.some((item) => item.id === "same-channel"),
+    false,
+    "表示しないチャンネルを候補から除外する",
   );
 
   const doneSeries = structuredClone(baseSeries);

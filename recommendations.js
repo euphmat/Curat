@@ -110,6 +110,50 @@
       : "known-channel";
   }
 
+  function recommendationGameKey(candidate) {
+    const projectName = normalizeRecommendationText(candidate?.matchedProjectName);
+    if (projectName) return `project:${projectName}`;
+    const rawTitle = String(candidate?.title || "")
+      .normalize("NFKC")
+      .toLocaleLowerCase();
+    const originalTitle = normalizeRecommendationText(rawTitle);
+    if (!originalTitle) return "";
+    const channelTitle = String(candidate?.channelTitle || "")
+      .normalize("NFKC")
+      .toLocaleLowerCase()
+      .trim();
+    let title = rawTitle;
+    if (channelTitle.length >= 2) title = title.replaceAll(channelTitle, " ");
+    title = title
+      .replace(/実況(?:プレイ)?/gu, " ")
+      .replace(/\b(?:full\s+)?(?:gameplay|playthrough|playlist)\b/giu, " ")
+      .replace(/\blet['’]?\s*s\s+play\b/giu, " ")
+      .replace(/\b(?:part|pt|episode|ep)[\s#.:_-]*\d+\b.*$/giu, " ")
+      .replace(/(?:パート|その|第)\s*[0-9〇零一二三四五六七八九十]+\s*(?:話|回)?\s*$/gu, " ")
+      .trim();
+    return `title:${normalizeRecommendationText(title) || originalTitle}`;
+  }
+
+  function recommendationChannelKey(candidate) {
+    const channelId = String(candidate?.channelId || "").trim();
+    if (channelId) return `id:${channelId}`;
+    const channelTitle = normalizeRecommendationText(candidate?.channelTitle);
+    return channelTitle ? `title:${channelTitle}` : "";
+  }
+
+  function isRecommendationDismissed(candidate, dismissals = {}) {
+    const dismissedGames = new Set(
+      Array.isArray(dismissals.games) ? dismissals.games : [],
+    );
+    const dismissedChannels = new Set(
+      Array.isArray(dismissals.channels) ? dismissals.channels : [],
+    );
+    return (
+      dismissedGames.has(recommendationGameKey(candidate)) ||
+      dismissedChannels.has(recommendationChannelKey(candidate))
+    );
+  }
+
   function scoreRecommendationCandidate(candidate, profile) {
     const text = candidateText(candidate);
     let score = 0;
@@ -156,15 +200,23 @@
       score,
       channelRelationship: matchingChannel ? "known" : "new",
       gameRelationship: matchingProject ? "known" : "new",
+      matchedProjectName: matchingProject?.name || "",
       reasons: uniqueValues(reasons).slice(0, 2),
     };
     return {
       ...scoredCandidate,
+      gameKey: recommendationGameKey(scoredCandidate),
+      channelKey: recommendationChannelKey(scoredCandidate),
       recommendationType: recommendationType(scoredCandidate),
     };
   }
 
-  function rankRecommendationCandidates(candidates, profile, limit = 12) {
+  function rankRecommendationCandidates(
+    candidates,
+    profile,
+    limit = 12,
+    dismissals = {},
+  ) {
     if (limit <= 0) return [];
     const seen = new Set();
     const ranked = (Array.isArray(candidates) ? candidates : [])
@@ -175,6 +227,7 @@
         return true;
       })
       .map((candidate) => scoreRecommendationCandidate(candidate, profile))
+      .filter((candidate) => !isRecommendationDismissed(candidate, dismissals))
       .filter((candidate) => candidate.score > 0)
       .sort(
         (left, right) =>
@@ -223,6 +276,9 @@
     normalizeRecommendationText,
     buildRecommendationProfile,
     recommendationType,
+    recommendationGameKey,
+    recommendationChannelKey,
+    isRecommendationDismissed,
     scoreRecommendationCandidate,
     rankRecommendationCandidates,
   };

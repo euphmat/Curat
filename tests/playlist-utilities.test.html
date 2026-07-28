@@ -10,6 +10,10 @@
     version: 1,
     updatedAt: now,
     playlistOrder: ["utility-series"],
+    recommendationDismissals: {
+      games: ["project:非表示ゲーム"],
+      channels: ["id:hidden-channel"],
+    },
     projects: [{ name: "テスト", aliases: [], learnedAliases: [] }],
     series: [{
       id: "utility-series",
@@ -56,12 +60,16 @@
     await waitForCuratTest(
       () => appDocument.querySelector('[data-task-id="todo"]')?.classList.contains("is-done"),
     );
-    const completed = (await exportCuratTestData(frame)).series[0].tasks;
+    const completedExport = await exportCuratTestData(frame);
+    const completed = completedExport.series[0].tasks;
     const completedCorrectly =
       completed.find((task) => task.id === "todo").status === "done" &&
       completed.find((task) => task.id === "doing").status === "done" &&
       completed.find((task) => task.id === "skipped").status === "skipped" &&
       completed.find((task) => task.id === "archived").status === "doing";
+    const dismissalsPreserved =
+      completedExport.recommendationDismissals.games[0] === "project:非表示ゲーム" &&
+      completedExport.recommendationDismissals.channels[0] === "id:hidden-channel";
 
     appDocument.querySelector('[data-detail-action="reset-progress"]')?.click();
     await waitForCuratTest(() => appDocument.querySelector("#confirmDialog").open);
@@ -76,8 +84,12 @@
       reset.filter((task) => !task.archived).every((task) => task.status === "todo") &&
       reset.find((task) => task.id === "archived").status === "doing";
     finish(
-      iconOnly && toolbarContained && completedCorrectly && resetCorrectly,
-      `icons=${iconOnly} actions=${actions.length} contained=${toolbarContained} complete=${completedCorrectly} reset=${resetCorrectly}`,
+      iconOnly &&
+        toolbarContained &&
+        completedCorrectly &&
+        resetCorrectly &&
+        dismissalsPreserved,
+      `icons=${iconOnly} actions=${actions.length} contained=${toolbarContained} complete=${completedCorrectly} reset=${resetCorrectly} dismissals=${dismissalsPreserved}`,
     );
   }, { once: true });
   frame.src = "../index.html";

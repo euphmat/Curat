@@ -35,6 +35,13 @@
         ["フォルダー表示モジュールを読み込める", Boolean(appWindow.CuratFolderDisplay)],
         ["おすすめ判定モジュールを読み込める", Boolean(appWindow.CuratRecommendations)],
         [
+          "おすすめ除外用のアイコンを利用できる",
+          Boolean(
+            appDocument.querySelector("#icon-eye-off") &&
+              appDocument.querySelector("#icon-user-x"),
+          ),
+        ],
+        [
           "アプリの初期描画が完了する",
           Boolean(appDocument.querySelector(".workspace-welcome, .workspace .detail-layout")),
         ],
