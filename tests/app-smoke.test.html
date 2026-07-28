@@ -78,13 +78,20 @@
             ),
         ],
         [
-          "名前変更とアイコン変更が専用モーダルに分かれている",
+          "名前変更とアイコン変更が専用ポップアップに分かれている",
           Boolean(
-            appDocument.querySelector("#renameFolderDialog #renameFolderForm") &&
+            appDocument.querySelector("#renameFolderDialog.folder-popup-dialog #renameFolderForm") &&
               appDocument.querySelector("#renameFolderForm #folderNameInput") &&
-              appDocument.querySelector("#folderIconDialog #folderIconForm") &&
+              appDocument.querySelector("#folderIconDialog.folder-popup-dialog #folderIconForm") &&
               !appDocument.querySelector("#renameFolderDialog #folderIconSearch") &&
               !appDocument.querySelector("#folderDialog #folderIconSearch")
+          ),
+        ],
+        [
+          "フォルダー名の近似候補を表示できる",
+          Boolean(
+            appDocument.querySelector("#folderNameInput[aria-autocomplete='list']") &&
+              appDocument.querySelector("#folderNameSuggestions[role='listbox']"),
           ),
         ],
         [

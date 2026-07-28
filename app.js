@@ -20,6 +20,8 @@ const {
 } = window.PlaylogEpisodeSort;
 const {
   normalizeForProjectMatch,
+  similarity,
+  subsequenceScore,
   matchesProjectSearch,
   classifyProject,
   rememberLearnedAlias,
@@ -63,7 +65,8 @@ const ICON_SEARCH_TRANSLATIONS = new Map([
 
 const defaultData = () => ({
   version: APP_VERSION,
-  updatedAt: new Date().toISOString(),
+  // An untouched device must never look newer than actual saved cloud data.
+  updatedAt: new Date(0).toISOString(),
   series: [],
   projects: [],
   playlistOrder: [],
@@ -106,6 +109,9 @@ const elements = {
   renameFolderDialog: $("#renameFolderDialog"),
   renameFolderForm: $("#renameFolderForm"),
   folderName: $("#folderNameInput"),
+  folderNameSuggestionsSection: $("#folderNameSuggestionsSection"),
+  folderNameSuggestions: $("#folderNameSuggestions"),
+  saveFolderName: $("#saveFolderName"),
   folderIconDialog: $("#folderIconDialog"),
   folderIconForm: $("#folderIconForm"),
   folderIconSearch: $("#folderIconSearch"),
@@ -160,6 +166,7 @@ let touchReorderGesture = null;
 let treeLongPressGesture = null;
 let detailReturnFocus = null;
 let editingFolderOriginalName = null;
+let folderNameSuggestionIndex = -1;
 let selectedFolderIcon = "";
 let folderIconSearchTimer = null;
 let folderIconSearchController = null;
@@ -424,6 +431,10 @@ function escapeHtml(value = "") {
   const node = document.createElement("div");
   node.textContent = value;
   return node.innerHTML;
+}
+
+function escapeAttribute(value = "") {
+  return escapeHtml(value).replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
 function getThumbnail(thumbnails = {}) {
@@ -1121,6 +1132,199 @@ function setAllProjectsExpanded(expanded) {
   showToast(expanded ? "すべてのフォルダーを展開しました" : "すべてのフォルダーを折りたたみました");
 }
 
+function positionFolderPopup(dialog, projectName) {
+  const anchor = folderRowByName(projectName);
+  if (!dialog.open || !anchor) return;
+
+  const viewportPadding = 12;
+  const gap = 12;
+  const anchorRect = anchor.getBoundingClientRect();
+  const popupRect = dialog.getBoundingClientRect();
+  const maxLeft = Math.max(viewportPadding, window.innerWidth - popupRect.width - viewportPadding);
+  const maxTop = Math.max(viewportPadding, window.innerHeight - popupRect.height - viewportPadding);
+  let left = anchorRect.right + gap;
+  let placement = "right";
+
+  if (left > maxLeft) {
+    left = anchorRect.left - popupRect.width - gap;
+    placement = "left";
+  }
+  if (left < viewportPadding) {
+    left = Math.min(maxLeft, Math.max(viewportPadding, anchorRect.left));
+    placement = "overlap";
+  }
+
+  const top = Math.min(maxTop, Math.max(viewportPadding, anchorRect.top - 18));
+  dialog.style.left = `${Math.round(left)}px`;
+  dialog.style.top = `${Math.round(top)}px`;
+  dialog.dataset.popupPlacement = placement;
+  dialog.classList.add("is-popup-positioned");
+}
+
+function showFolderPopup(dialog, projectName, focusTarget) {
+  dialog.classList.remove("is-popup-positioned");
+  dialog.style.removeProperty("left");
+  dialog.style.removeProperty("top");
+  dialog.showModal();
+  requestAnimationFrame(() => {
+    positionFolderPopup(dialog, projectName);
+    focusTarget?.focus();
+  });
+}
+
+function folderNameSuggestionCandidates(projectName) {
+  const rule = projectRuleByName(projectName);
+  const relatedSeries = data.series.filter(
+    (series) => (series.project || series.title) === projectName,
+  );
+  const candidates = [
+    { value: projectName, source: "現在の名前", priority: 4 },
+    ...(rule?.aliases || []).map((value) => ({
+      value,
+      source: "登録済みの別名",
+      priority: 3,
+    })),
+    ...(rule?.learnedAliases || []).map((value) => ({
+      value,
+      source: "自動分類で見つけた名前",
+      priority: 2,
+    })),
+    ...relatedSeries.map((series) => ({
+      value: series.title,
+      source: "プレイリスト名",
+      priority: 1,
+    })),
+  ];
+  return [
+    ...new Map(
+      candidates
+        .map((item) => ({ ...item, value: String(item.value || "").trim().slice(0, 180) }))
+        .filter((item) => item.value)
+        .map((item) => [normalizeProjectMatch(item.value), item]),
+    ).values(),
+  ];
+}
+
+function folderNameSuggestionScore(query, candidate) {
+  const normalizedQuery = normalizeProjectMatch(query);
+  const normalizedCandidate = normalizeProjectMatch(candidate.value);
+  if (!normalizedCandidate) return 0;
+  if (!normalizedQuery) return candidate.priority / 10;
+  if (normalizedCandidate === normalizedQuery) return 2;
+  if (normalizedCandidate.startsWith(normalizedQuery)) return 1.5;
+  if (normalizedCandidate.includes(normalizedQuery)) return 1.3;
+  return Math.max(
+    similarity(normalizedQuery, normalizedCandidate),
+    subsequenceScore(normalizedQuery, normalizedCandidate),
+  );
+}
+
+function setFolderNameSuggestionIndex(index) {
+  const options = $$("[data-folder-name-suggestion]", elements.folderNameSuggestions);
+  if (!options.length) {
+    folderNameSuggestionIndex = -1;
+    elements.folderName.removeAttribute("aria-activedescendant");
+    return;
+  }
+  folderNameSuggestionIndex = (index + options.length) % options.length;
+  options.forEach((option, optionIndex) => {
+    const selected = optionIndex === folderNameSuggestionIndex;
+    option.classList.toggle("is-active", selected);
+    option.setAttribute("aria-selected", String(selected));
+  });
+  const activeOption = options[folderNameSuggestionIndex];
+  elements.folderName.setAttribute("aria-activedescendant", activeOption.id);
+  activeOption.scrollIntoView({ block: "nearest" });
+}
+
+function chooseFolderNameSuggestion(value) {
+  elements.folderName.value = value;
+  folderNameSuggestionIndex = -1;
+  updateRenameFolderInteraction();
+  elements.folderName.focus();
+  elements.folderName.setSelectionRange(value.length, value.length);
+}
+
+function renderFolderNameSuggestions() {
+  const query = elements.folderName.value.trim();
+  const normalizedQuery = normalizeProjectMatch(query);
+  const formattedQuery = displayFolderName(query);
+  const candidates = folderNameSuggestionCandidates(editingFolderOriginalName);
+
+  if (
+    formattedQuery &&
+    formattedQuery !== query &&
+    !candidates.some(
+      (item) => normalizeProjectMatch(item.value) === normalizeProjectMatch(formattedQuery),
+    )
+  ) {
+    candidates.unshift({
+      value: formattedQuery,
+      source: "読みやすい表記",
+      priority: 5,
+    });
+  }
+
+  const threshold = [...normalizedQuery].length < 3 ? 0.5 : 0.36;
+  const suggestions = candidates
+    .map((item) => ({ ...item, score: folderNameSuggestionScore(query, item) }))
+    .filter(
+      (item) =>
+        normalizeProjectMatch(item.value) !== normalizedQuery &&
+        (!normalizedQuery || item.score >= threshold),
+    )
+    .sort((left, right) => right.score - left.score || right.priority - left.priority)
+    .slice(0, 6);
+
+  folderNameSuggestionIndex = -1;
+  elements.folderNameSuggestionsSection.hidden = suggestions.length === 0;
+  elements.folderName.setAttribute("aria-expanded", String(suggestions.length > 0));
+  elements.folderName.removeAttribute("aria-activedescendant");
+  elements.folderNameSuggestions.innerHTML = suggestions
+    .map(
+      (item, index) => `
+        <button
+          class="folder-name-suggestion"
+          id="folderNameSuggestion-${index}"
+          type="button"
+          role="option"
+          aria-selected="false"
+          data-folder-name-suggestion="${escapeAttribute(item.value)}"
+        >
+          <span>${escapeHtml(displayFolderName(item.value))}</span>
+          <small>${escapeHtml(item.source)}</small>
+        </button>
+      `,
+    )
+    .join("");
+  if (elements.renameFolderDialog.open && editingFolderOriginalName) {
+    requestAnimationFrame(() =>
+      positionFolderPopup(elements.renameFolderDialog, editingFolderOriginalName),
+    );
+  }
+}
+
+function updateRenameFolderInteraction() {
+  const enteredName = elements.folderName.value.trim();
+  const name = displayFolderName(enteredName);
+  const duplicate = name
+    ? findEquivalentProjectName(name, editingFolderOriginalName || "")
+    : "";
+  $("#folderNameError").textContent = duplicate
+    ? `「${duplicate}」はすでに存在します。`
+    : "";
+  elements.saveFolderName.disabled = !name || Boolean(duplicate);
+  renderFolderNameSuggestions();
+}
+
+function previewSelectedFolderIcon() {
+  if (!editingFolderIconName) return;
+  const row = folderRowByName(editingFolderIconName);
+  if (!row) return;
+  const target = $(".folder-icon", row);
+  if (target) target.innerHTML = folderIconMarkup(selectedFolderIcon);
+}
+
 function updateFolderIconSelection() {
   const builtin = builtinFolderIcon(selectedFolderIcon);
   const label = builtin?.label || selectedFolderIcon || "標準のフォルダー";
@@ -1135,6 +1339,7 @@ function updateFolderIconSelection() {
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-selected", String(selected));
   });
+  previewSelectedFolderIcon();
 }
 
 function activeFolderEditorContainer() {
@@ -1149,6 +1354,7 @@ function folderIconOptionMarkup(item) {
       role="option"
       data-folder-icon="${escapeHtml(item.value)}"
       aria-selected="${item.value === selectedFolderIcon}"
+      aria-label="${escapeHtml(item.label)}"
       title="${escapeHtml(item.label)}"
     >
       <span aria-hidden="true">${folderIconMarkup(item.value)}</span>
@@ -1175,6 +1381,11 @@ function renderFolderIconResults(items, status) {
   elements.folderIconStatus.textContent = status;
   renderRecentFolderIcons();
   updateFolderIconSelection();
+  if (elements.folderIconDialog.open && editingFolderIconName) {
+    requestAnimationFrame(() =>
+      positionFolderPopup(elements.folderIconDialog, editingFolderIconName),
+    );
+  }
 }
 
 function showBuiltinFolderIcons() {
@@ -1206,7 +1417,7 @@ async function searchFolderIcons(rawQuery) {
   try {
     const url = new URL("https://api.iconify.design/search");
     url.searchParams.set("query", translatedQuery);
-    url.searchParams.set("limit", "48");
+    url.searchParams.set("limit", "96");
     url.searchParams.set("prefixes", COLOR_ICON_PREFIXES.join(","));
     const response = await fetch(url, { signal: searchController.signal });
     if (!response.ok) throw new Error(`Icon search failed: ${response.status}`);
@@ -1269,9 +1480,9 @@ function openRenameFolderDialog(projectName) {
   $("#folderNameError").textContent = "";
   $("#renameFolderSummary").innerHTML =
     `<strong>${seriesCount} 件のプレイリスト</strong>が新しい名前へ移動します。`;
-  elements.renameFolderDialog.showModal();
-  setTimeout(() => {
-    elements.folderName.focus();
+  updateRenameFolderInteraction();
+  showFolderPopup(elements.renameFolderDialog, projectName, elements.folderName);
+  requestAnimationFrame(() => {
     elements.folderName.select();
   });
 }
@@ -1284,8 +1495,7 @@ function openFolderIconDialog(projectName) {
   $("#folderIconDialogLead").textContent =
     `「${displayFolderName(projectName)}」のアイコンを選んでください。`;
   showBuiltinFolderIcons();
-  elements.folderIconDialog.showModal();
-  setTimeout(() => elements.folderIconSearch.focus());
+  showFolderPopup(elements.folderIconDialog, projectName, elements.folderIconSearch);
 }
 
 function saveNewFolder() {
@@ -2722,8 +2932,44 @@ elements.renameFolderForm.addEventListener("submit", (event) => {
 elements.renameFolderForm.querySelectorAll(".close-button, .secondary-button").forEach((button) => {
   button.addEventListener("click", () => elements.renameFolderDialog.close());
 });
-elements.folderName.addEventListener("input", () => {
-  $("#folderNameError").textContent = "";
+elements.folderName.addEventListener("input", updateRenameFolderInteraction);
+elements.folderName.addEventListener("keydown", (event) => {
+  const suggestionsVisible = !elements.folderNameSuggestionsSection.hidden;
+  if ((event.key === "ArrowDown" || event.key === "ArrowUp") && suggestionsVisible) {
+    event.preventDefault();
+    const optionCount = $$(
+      "[data-folder-name-suggestion]",
+      elements.folderNameSuggestions,
+    ).length;
+    const nextIndex =
+      folderNameSuggestionIndex < 0
+        ? event.key === "ArrowDown"
+          ? 0
+          : optionCount - 1
+        : folderNameSuggestionIndex + (event.key === "ArrowDown" ? 1 : -1);
+    setFolderNameSuggestionIndex(nextIndex);
+    return;
+  }
+  if (event.key === "Enter" && folderNameSuggestionIndex >= 0) {
+    event.preventDefault();
+    const option = $$(
+      "[data-folder-name-suggestion]",
+      elements.folderNameSuggestions,
+    )[folderNameSuggestionIndex];
+    if (option) chooseFolderNameSuggestion(option.dataset.folderNameSuggestion);
+    return;
+  }
+  if (event.key === "Escape" && suggestionsVisible) {
+    event.preventDefault();
+    elements.folderNameSuggestionsSection.hidden = true;
+    elements.folderName.setAttribute("aria-expanded", "false");
+    elements.folderName.removeAttribute("aria-activedescendant");
+    folderNameSuggestionIndex = -1;
+  }
+});
+elements.folderNameSuggestions.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-folder-name-suggestion]");
+  if (option) chooseFolderNameSuggestion(option.dataset.folderNameSuggestion);
 });
 
 elements.folderIconForm.addEventListener("submit", (event) => {
@@ -2751,12 +2997,43 @@ elements.folderIconSearch.addEventListener("keydown", (event) => {
     elements.folderIconSearch.value = "";
     showBuiltinFolderIcons();
   }
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    $("[data-folder-icon]", elements.folderIconResults)?.focus();
+  }
 });
 elements.folderIconDialog.addEventListener("click", (event) => {
+  if (event.target === elements.folderIconDialog) {
+    elements.folderIconDialog.close();
+    return;
+  }
   const option = event.target.closest("[data-folder-icon]");
   if (!option) return;
   selectedFolderIcon = normalizeFolderIcon(option.dataset.folderIcon);
   updateFolderIconSelection();
+});
+elements.folderIconDialog.addEventListener("dblclick", (event) => {
+  if (event.target.closest("[data-folder-icon]")) {
+    elements.folderIconForm.requestSubmit(elements.folderIconForm.querySelector("[type='submit']"));
+  }
+});
+elements.folderIconDialog.addEventListener("keydown", (event) => {
+  const option = event.target.closest("[data-folder-icon]");
+  if (!option || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+    return;
+  }
+  event.preventDefault();
+  const container = option.closest(".folder-icon-results");
+  const options = $$("[data-folder-icon]", container);
+  const index = options.indexOf(option);
+  const columnCount = getComputedStyle(container).gridTemplateColumns.split(" ").length;
+  const offset = {
+    ArrowLeft: -1,
+    ArrowRight: 1,
+    ArrowUp: -columnCount,
+    ArrowDown: columnCount,
+  }[event.key];
+  options[Math.max(0, Math.min(options.length - 1, index + offset))]?.focus();
 });
 $("#resetFolderIcon").addEventListener("click", () => {
   selectedFolderIcon = "";
@@ -2764,11 +3041,33 @@ $("#resetFolderIcon").addEventListener("click", () => {
 });
 
 elements.renameFolderDialog.addEventListener("close", () => {
+  elements.folderNameSuggestionsSection.hidden = true;
+  elements.folderName.setAttribute("aria-expanded", "false");
+  elements.saveFolderName.disabled = false;
+  folderNameSuggestionIndex = -1;
   editingFolderOriginalName = null;
 });
 elements.folderIconDialog.addEventListener("close", () => {
   stopFolderIconSearch();
+  if (editingFolderIconName) {
+    const row = folderRowByName(editingFolderIconName);
+    const target = row ? $(".folder-icon", row) : null;
+    if (target) {
+      target.innerHTML = folderIconMarkup(projectRuleByName(editingFolderIconName)?.icon);
+    }
+  }
   editingFolderIconName = null;
+});
+elements.renameFolderDialog.addEventListener("click", (event) => {
+  if (event.target === elements.renameFolderDialog) elements.renameFolderDialog.close();
+});
+window.addEventListener("resize", () => {
+  if (elements.renameFolderDialog.open && editingFolderOriginalName) {
+    positionFolderPopup(elements.renameFolderDialog, editingFolderOriginalName);
+  }
+  if (elements.folderIconDialog.open && editingFolderIconName) {
+    positionFolderPopup(elements.folderIconDialog, editingFolderIconName);
+  }
 });
 
 elements.contextMenu.addEventListener("click", (event) => {

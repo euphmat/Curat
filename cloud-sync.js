@@ -17,6 +17,10 @@ function cloneForFirebase(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function hasContent(value) {
+  return Boolean(value?.series?.length) || Boolean(value?.projects?.length);
+}
+
 function friendlyAuthError(error) {
   const messages = {
     "auth/invalid-credential": "メールアドレスまたはパスワードが違います。",
@@ -123,11 +127,8 @@ export class CloudSync {
     if (cloudPayload?.data) {
       const cloudUpdated = Date.parse(cloudPayload.data.updatedAt || 0) || 0;
       const localUpdated = Date.parse(localData?.updatedAt || 0) || 0;
-      const cloudHasContent =
-        Boolean(cloudPayload.data.series?.length) ||
-        Boolean(cloudPayload.data.projects?.length);
-      const localHasContent =
-        Boolean(localData?.series?.length) || Boolean(localData?.projects?.length);
+      const cloudHasContent = hasContent(cloudPayload.data);
+      const localHasContent = hasContent(localData);
       this.lastAppliedCloudTime = Number(cloudPayload.cloudUpdatedAt) || 0;
       if (cloudUpdated > localUpdated || (!localHasContent && cloudHasContent)) {
         this.applyRemotePayload(cloudPayload, true);
@@ -155,9 +156,13 @@ export class CloudSync {
     if (!initial && (fromThisSession || cloudTime <= this.lastAppliedCloudTime)) return;
 
     this.lastAppliedCloudTime = Math.max(this.lastAppliedCloudTime, cloudTime);
-    const localUpdated = Date.parse(this.getLocalData()?.updatedAt || 0) || 0;
+    const localData = this.getLocalData();
+    const localUpdated = Date.parse(localData?.updatedAt || 0) || 0;
     const remoteUpdated = Date.parse(payload.data.updatedAt || 0) || 0;
-    if (remoteUpdated >= localUpdated) {
+    if (
+      remoteUpdated >= localUpdated ||
+      (!hasContent(localData) && hasContent(payload.data))
+    ) {
       this.onRemoteData(cloneForFirebase(payload.data));
     }
     this.emitSettled();

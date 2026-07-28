@@ -386,8 +386,8 @@
       </form>
     </dialog>
 
-    <dialog class="sheet-dialog folder-rename-dialog" id="renameFolderDialog">
-      <form method="dialog" class="sheet" id="renameFolderForm">
+    <dialog class="sheet-dialog folder-popup-dialog folder-rename-dialog" id="renameFolderDialog">
+      <form method="dialog" class="sheet folder-popup-card" id="renameFolderForm">
         <div class="sheet-head">
           <div>
             <span class="folder-editor-eyebrow">フォルダー情報</span>
@@ -405,10 +405,27 @@
             id="folderNameInput"
             placeholder="例：ポケットモンスター"
             autocomplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            aria-controls="folderNameSuggestions"
+            aria-expanded="false"
             required
           />
           <small id="folderNameError" class="field-error" aria-live="polite"></small>
         </label>
+        <section class="folder-name-suggestions" id="folderNameSuggestionsSection" hidden>
+          <div class="folder-suggestion-head">
+            <strong>入力に近い候補</strong>
+            <small>クリック、または ↑↓ キーで選択</small>
+          </div>
+          <div
+            class="folder-suggestion-list"
+            id="folderNameSuggestions"
+            role="listbox"
+            aria-label="フォルダー名の候補"
+          ></div>
+        </section>
         <div class="folder-summary" id="renameFolderSummary"></div>
         <div class="sheet-actions">
           <button class="secondary-button" value="cancel" type="button">キャンセル</button>
@@ -417,8 +434,8 @@
       </form>
     </dialog>
 
-    <dialog class="sheet-dialog folder-dialog folder-icon-dialog" id="folderIconDialog">
-      <form method="dialog" class="sheet" id="folderIconForm">
+    <dialog class="sheet-dialog folder-dialog folder-popup-dialog folder-icon-dialog" id="folderIconDialog">
+      <form method="dialog" class="sheet folder-popup-card" id="folderIconForm">
         <div class="sheet-head">
           <div>
             <span class="folder-editor-eyebrow">見た目をカスタマイズ</span>

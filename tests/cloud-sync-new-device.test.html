@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<script type="module">
+  try {
+    const { CloudSync } = await import("../cloud-sync.js");
+    let appliedData = null;
+    const sync = new CloudSync({
+      getLocalData: () => ({
+        version: 1,
+        updatedAt: "2026-07-28T02:00:00.000Z",
+        series: [],
+        projects: [],
+        playlistOrder: [],
+      }),
+      onRemoteData: (data) => {
+        appliedData = data;
+      },
+      onStatus: () => {},
+    });
+
+    sync.applyRemotePayload({
+      originId: "pc-session",
+      cloudUpdatedAt: 100,
+      data: {
+        version: 1,
+        updatedAt: "2026-07-28T01:00:00.000Z",
+        series: [{ id: "restored-on-pc" }],
+        projects: [{ name: "PCで復元" }],
+        playlistOrder: ["restored-on-pc"],
+      },
+    }, true);
+
+    const passed = appliedData?.series?.[0]?.id === "restored-on-pc";
+    document.querySelector("#result").textContent = passed
+      ? "PASS an empty new device accepts older cloud content"
+      : `FAIL applied=${JSON.stringify(appliedData)}`;
+    document.title = passed ? "PASS" : "FAIL";
+  } catch (error) {
+    document.querySelector("#result").textContent = `FAIL ${error.message}`;
+    document.title = "FAIL";
+  }
+</script>

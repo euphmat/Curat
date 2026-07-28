@@ -6665,3 +6665,256 @@ body.is-touch-reordering {
     grid-template-columns: 36px 24px minmax(0, 1fr) auto 42px;
   }
 }
+
+/* Folder editing popups stay visually attached to the selected explorer row. */
+.folder-popup-dialog {
+  position: fixed;
+  inset: auto;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  margin: 0;
+  overflow: hidden;
+  border-color: rgba(199, 181, 255, 0.44);
+  border-radius: 16px;
+  box-shadow:
+    0 24px 70px rgba(3, 2, 16, 0.56),
+    0 0 0 1px rgba(128, 229, 247, 0.08);
+  opacity: 0;
+  transform: translateY(7px) scale(0.985);
+}
+
+.folder-popup-dialog.is-popup-positioned {
+  opacity: 1;
+  transform: none;
+  animation: folder-popup-in 150ms ease-out;
+}
+
+.folder-popup-dialog::backdrop {
+  background: rgba(5, 3, 17, 0.34);
+  backdrop-filter: blur(2px);
+}
+
+.folder-popup-card {
+  max-height: calc(100dvh - 24px);
+  padding: 20px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #65578b transparent;
+}
+
+.folder-popup-card .sheet-head {
+  align-items: center;
+  margin-bottom: 11px;
+}
+
+.folder-popup-card .sheet-head h2 {
+  font-size: 20px;
+}
+
+.folder-popup-card .sheet-lead {
+  margin-bottom: 16px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.folder-popup-card .field {
+  margin-bottom: 8px;
+}
+
+.folder-popup-card .sheet-actions {
+  position: sticky;
+  bottom: -20px;
+  z-index: 2;
+  margin: 16px -20px -20px;
+  padding: 13px 20px 16px;
+  background: linear-gradient(180deg, rgba(18, 16, 43, 0), #12102b 26%);
+}
+
+.folder-rename-dialog {
+  width: min(430px, calc(100vw - 24px));
+}
+
+.folder-name-suggestions {
+  margin: 5px 0 12px;
+}
+
+.folder-suggestion-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.folder-suggestion-head strong {
+  color: #e9e2fa;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.folder-suggestion-head small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.folder-suggestion-list {
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  padding: 4px;
+  overflow-y: auto;
+  background: rgba(15, 12, 36, 0.62);
+  border: 1px solid rgba(190, 173, 255, 0.16);
+  border-radius: 11px;
+  scrollbar-width: thin;
+  scrollbar-color: #65578b transparent;
+}
+
+.folder-name-suggestion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 7px 10px;
+  color: #ddd5ec;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.folder-name-suggestion:hover,
+.folder-name-suggestion.is-active {
+  color: #fff;
+  background: linear-gradient(100deg, rgba(145, 105, 226, 0.3), rgba(71, 192, 221, 0.1));
+  border-color: rgba(151, 226, 244, 0.28);
+}
+
+.folder-name-suggestion span {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-name-suggestion small {
+  color: #9990ad;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.folder-rename-dialog .folder-summary {
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+.folder-icon-dialog {
+  width: min(520px, calc(100vw - 24px));
+}
+
+.folder-icon-dialog .folder-popup-card {
+  max-height: calc(100dvh - 24px);
+}
+
+.folder-icon-dialog .folder-icon-picker {
+  margin-bottom: 0;
+}
+
+.folder-icon-dialog .folder-icon-picker-head {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  min-height: 56px;
+  padding: 7px 9px;
+}
+
+.folder-icon-dialog .folder-icon-current {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+}
+
+.folder-icon-dialog .folder-icon-section-head {
+  margin-top: 12px;
+}
+
+.folder-icon-dialog .folder-icon-search {
+  height: 40px;
+  margin-top: 7px;
+}
+
+.folder-icon-dialog .folder-icon-results {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  max-height: min(390px, 46dvh);
+  padding: 4px;
+  overscroll-behavior: contain;
+  background: rgba(15, 12, 36, 0.5);
+  border: 1px solid rgba(190, 173, 255, 0.13);
+  border-radius: 11px;
+}
+
+.folder-icon-dialog .folder-icon-results-recent {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  max-height: 76px;
+}
+
+.folder-icon-dialog .folder-icon-option {
+  min-height: 56px;
+  padding: 6px 2px 4px;
+}
+
+.folder-icon-dialog .folder-icon-option:focus-visible {
+  outline: 2px solid #8feaff;
+  outline-offset: -2px;
+}
+
+.folder-icon-dialog .folder-icon-status {
+  min-height: 15px;
+  margin-top: 4px;
+}
+
+@keyframes folder-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .folder-popup-dialog {
+    left: 12px !important;
+    width: calc(100vw - 24px);
+  }
+
+  .folder-popup-card {
+    padding: 17px;
+  }
+
+  .folder-popup-card .sheet-actions {
+    bottom: -17px;
+    margin: 14px -17px -17px;
+    padding: 12px 17px 15px;
+  }
+
+  .folder-icon-dialog .folder-icon-results {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .folder-icon-dialog .folder-icon-results-recent {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-height: 136px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-popup-dialog.is-popup-positioned {
+    animation: none;
+  }
+}

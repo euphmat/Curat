@@ -50,9 +50,21 @@
           !appDocument.querySelector("#folderDialog").open &&
           renameDialog.open &&
           !appDocument.querySelector("#folderIconDialog").open &&
+          renameDialog.classList.contains("folder-popup-dialog") &&
+          renameDialog.classList.contains("is-popup-positioned") &&
           appDocument.activeElement === appDocument.querySelector("#folderNameInput");
 
-        appDocument.querySelector("#folderNameInput").value = "新しいフォルダー名";
+        const folderNameInput = appDocument.querySelector("#folderNameInput");
+        folderNameInput.value = "旧";
+        folderNameInput.dispatchEvent(new Event("input", { bubbles: true }));
+        const suggestedAlias = Boolean(
+          appDocument.querySelector(
+            "#folderNameSuggestions [data-folder-name-suggestion='旧別名']",
+          ),
+        );
+
+        folderNameInput.value = "新しいフォルダー名";
+        folderNameInput.dispatchEvent(new Event("input", { bubbles: true }));
         renameForm.requestSubmit(appDocument.querySelector("#saveFolderName"));
 
         setTimeout(() => {
@@ -71,8 +83,14 @@
             const openedIconOnly =
               iconDialog.open &&
               !renameDialog.open &&
+              iconDialog.classList.contains("folder-popup-dialog") &&
+              iconDialog.classList.contains("is-popup-positioned") &&
               appDocument.activeElement === appDocument.querySelector("#folderIconSearch");
             appDocument.querySelector("[data-folder-icon='builtin:sword']").click();
+            const livePreview = [...appDocument.querySelectorAll("[data-tree-folder]")]
+              .find((item) => item.dataset.treeFolder === "新しいフォルダー名")
+              ?.querySelector(".folder-color-icon")
+              ?.src.includes("crossed-swords.svg");
             appDocument.querySelector("#folderIconForm")
               .requestSubmit(appDocument.querySelector("#saveFolderIcon"));
 
@@ -102,11 +120,16 @@
                 ),
               );
               const passed =
-                openedRenameOnly && openedIconOnly && savedSeparately && recentPassed;
+                openedRenameOnly &&
+                suggestedAlias &&
+                openedIconOnly &&
+                livePreview &&
+                savedSeparately &&
+                recentPassed;
 
               document.querySelector("#result").textContent = passed
-                ? "PASS folder name and icon use focused dialogs with recent emoji history"
-                : `FAIL rename=${openedRenameOnly} icon=${openedIconOnly} saved=${savedSeparately} recent=${recentPassed} project=${JSON.stringify(project)}`;
+                ? "PASS folder name and icon use interactive anchored popups"
+                : `FAIL rename=${openedRenameOnly} suggested=${suggestedAlias} icon=${openedIconOnly} preview=${livePreview} saved=${savedSeparately} recent=${recentPassed} project=${JSON.stringify(project)}`;
               document.title = passed ? "PASS" : "FAIL";
             }, 100);
           }, 50);
