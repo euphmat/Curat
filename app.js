@@ -15,7 +15,12 @@ const TOUCH_LONG_PRESS_MS = 560;
 const TOUCH_MOVE_THRESHOLD = 10;
 const RECOMMENDATION_PROJECT_SEARCH_LIMIT = 6;
 const RECOMMENDATION_CHANNEL_SEARCH_LIMIT = 6;
-const RECOMMENDATION_CANDIDATE_LIMIT = 150;
+const RECOMMENDATION_DISCOVERY_SEARCH_TERMS = [
+  "ゲーム実況 プレイリスト",
+  "ゲーム実況 完結",
+];
+const RECOMMENDATION_DISCOVERY_CANDIDATE_LIMIT = 100;
+const RECOMMENDATION_CANDIDATE_LIMIT = 250;
 const RECOMMENDATION_RESULT_LIMIT_PER_TYPE = 8;
 const {
   parseEpisodeOrder,
@@ -40,6 +45,7 @@ const {
 } = window.CuratPlaylistOrder;
 const { compareFolderNames } = window.CuratFolderOrder;
 const {
+  RECOMMENDATION_TYPES,
   buildRecommendationProfile,
   isRecommendationDismissed,
   recommendationChannelKey,
@@ -249,7 +255,9 @@ function loadBrowserSettings() {
             .map((id) => String(id || "").trim())
             .filter(Boolean),
         ),
-      ].slice(-RECOMMENDATION_RESULT_LIMIT_PER_TYPE * 3),
+      ].slice(
+        -RECOMMENDATION_RESULT_LIMIT_PER_TYPE * RECOMMENDATION_TYPES.length,
+      ),
     };
   } catch {
     return {
@@ -857,7 +865,11 @@ function recommendationDataSignature() {
   ].join("::");
 }
 
-function recommendationCandidateFromResource(resource, sourceProjectName = "") {
+function recommendationCandidateFromResource(
+  resource,
+  sourceProjectName = "",
+  sourceKind = "",
+) {
   const snippet = resource?.snippet || {};
   return {
     id: resource?.id?.playlistId || resource?.id || "",
@@ -870,6 +882,8 @@ function recommendationCandidateFromResource(resource, sourceProjectName = "") {
     itemCount: resource?.contentDetails?.itemCount ?? 0,
     privacyStatus: resource?.status?.privacyStatus || "unknown",
     sourceProjectNames: new Set(sourceProjectName ? [sourceProjectName] : []),
+    discoverySource: sourceKind === "discovery",
+    needsHydration: Boolean(resource?.id?.playlistId),
   };
 }
 
@@ -883,6 +897,10 @@ function mergeRecommendationCandidate(candidateMap, candidate) {
   for (const projectName of candidate.sourceProjectNames || []) {
     existing.sourceProjectNames.add(projectName);
   }
+  existing.discoverySource =
+    Boolean(existing.discoverySource) || Boolean(candidate.discoverySource);
+  existing.needsHydration =
+    Boolean(existing.needsHydration) && Boolean(candidate.needsHydration);
   for (const key of [
     "title",
     "description",
@@ -936,7 +954,7 @@ async function hydrateRegisteredPlaylistChannels() {
 
 function recommendationCardHtml(candidate) {
   const isNewChannel = candidate.channelRelationship === "new";
-  const isNewGame = recommendationType(candidate) === "new-game";
+  const isNewGame = candidate.gameRelationship === "new";
   return `
     <article class="recommendation-card${isNewChannel ? " is-new-channel" : ""}${isNewGame ? " is-new-game" : ""}" data-recommendation-id="${escapeHtml(candidate.id)}">
       <a
@@ -1008,20 +1026,30 @@ const RECOMMENDATION_TABS = {
   "new-channel": {
     id: "recommendationTabNewChannel",
     label: "新しい投稿者",
+    icon: "user-plus",
     emptyTitle: "新しい投稿者の候補がありません",
     emptyCopy: "登録済みのゲームに関連する別の投稿者が見つかると、ここに表示します。",
   },
   "known-channel": {
     id: "recommendationTabKnownChannel",
     label: "追加済みの投稿者",
+    icon: "user-check",
     emptyTitle: "追加済みの投稿者から候補がありません",
     emptyCopy: "登録済みの投稿者が同じゲームの別シリーズを公開すると、ここに表示します。",
   },
   "new-game": {
     id: "recommendationTabNewGame",
     label: "新しいゲーム",
+    icon: "gamepad",
     emptyTitle: "新しいゲームの候補がありません",
     emptyCopy: "登録済みの投稿者による、ライブラリにないゲームが見つかると、ここに表示します。",
+  },
+  "new-game-new-channel": {
+    id: "recommendationTabNewGameNewChannel",
+    label: "新しいゲーム AND 新しい投稿者",
+    icon: "sparkles",
+    emptyTitle: "新しいゲームと投稿者の候補がありません",
+    emptyCopy: "ゲームと投稿者の両方がライブラリにない候補が見つかると、ここに表示します。",
   },
 };
 
@@ -1103,7 +1131,7 @@ function renderRecommendationResults() {
   if (!visibleCandidates.length) {
     elements.recommendationResults.innerHTML = `
       <div class="recommendation-empty">
-        ${icon(activeRecommendationTab === "new-game" ? "gamepad" : "search")}
+        ${icon(activeTab.icon || "search")}
         <strong>${escapeHtml(activeTab.emptyTitle)}</strong>
         <span>${escapeHtml(activeTab.emptyCopy)}</span>
       </div>
@@ -1169,6 +1197,22 @@ async function loadRecommendations() {
       });
     }
 
+    for (const query of RECOMMENDATION_DISCOVERY_SEARCH_TERMS) {
+      requests.push({
+        kind: "discovery",
+        promise: fetchJson("search", {
+          part: "snippet",
+          type: "playlist",
+          q: query,
+          order: "relevance",
+          maxResults: 50,
+          regionCode: "JP",
+          relevanceLanguage: "ja",
+          safeSearch: "moderate",
+        }),
+      });
+    }
+
     const settled = await Promise.allSettled(requests.map((request) => request.promise));
     const failures = [];
     settled.forEach((result, index) => {
@@ -1183,6 +1227,7 @@ async function loadRecommendations() {
           recommendationCandidateFromResource(
             resource,
             request.kind === "project" ? request.projectName : "",
+            request.kind,
           ),
         );
       }
@@ -1190,15 +1235,27 @@ async function loadRecommendations() {
 
     if (!candidateMap.size && failures.length) throw failures[0];
 
-    const candidateIds = [...candidateMap.values()]
-      .filter((candidate) => !profile.registeredIds.has(candidate.id))
-      .sort(
-        (left, right) =>
-          Number((right.sourceProjectNames?.size || 0) > 0) -
-          Number((left.sourceProjectNames?.size || 0) > 0),
-      )
+    const candidatesNeedingHydration = [...candidateMap.values()].filter(
+      (candidate) =>
+        !profile.registeredIds.has(candidate.id) &&
+        candidate.needsHydration,
+    );
+    const discoveryCandidateIds = candidatesNeedingHydration
+      .filter((candidate) => candidate.discoverySource)
       .map((candidate) => candidate.id)
-      .slice(0, RECOMMENDATION_CANDIDATE_LIMIT);
+      .slice(0, RECOMMENDATION_DISCOVERY_CANDIDATE_LIMIT);
+    const discoveryCandidateIdSet = new Set(discoveryCandidateIds);
+    const candidateIds = [
+      ...discoveryCandidateIds,
+      ...candidatesNeedingHydration
+        .filter((candidate) => !discoveryCandidateIdSet.has(candidate.id))
+        .sort(
+          (left, right) =>
+            Number((right.sourceProjectNames?.size || 0) > 0) -
+            Number((left.sourceProjectNames?.size || 0) > 0),
+        )
+        .map((candidate) => candidate.id),
+    ].slice(0, RECOMMENDATION_CANDIDATE_LIMIT);
     if (candidateIds.length) {
       const details = await fetchPlaylistResources(candidateIds);
       for (const resource of details) {

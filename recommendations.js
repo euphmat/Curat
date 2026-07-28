@@ -8,6 +8,12 @@
     "プレイリスト",
     "playlist",
   ]);
+  const RECOMMENDATION_TYPES = Object.freeze([
+    "new-channel",
+    "known-channel",
+    "new-game",
+    "new-game-new-channel",
+  ]);
 
   function normalizeRecommendationText(value = "") {
     return String(value)
@@ -104,10 +110,11 @@
   }
 
   function recommendationType(candidate) {
-    if (candidate?.gameRelationship === "new") return "new-game";
-    return candidate?.channelRelationship === "new"
-      ? "new-channel"
-      : "known-channel";
+    const isNewGame = candidate?.gameRelationship === "new";
+    const isNewChannel = candidate?.channelRelationship === "new";
+    if (isNewGame && isNewChannel) return "new-game-new-channel";
+    if (isNewGame) return "new-game";
+    return isNewChannel ? "new-channel" : "known-channel";
   }
 
   function recommendationGameKey(candidate) {
@@ -276,18 +283,13 @@
           left.title.localeCompare(right.title, "ja"),
       );
 
-    // Keep each discovery tab useful before filling the remaining slots by
-    // overall relevance.
-    const newChannelCandidates = diversifyRecommendationGames(
-      ranked.filter((candidate) => candidate.recommendationType === "new-channel"),
+    // Take turns across all four mutually exclusive tabs so one relationship
+    // cannot crowd the other discovery paths out of a limited result set.
+    const queues = RECOMMENDATION_TYPES.map((type) =>
+      diversifyRecommendationGames(
+        ranked.filter((candidate) => candidate.recommendationType === type),
+      ),
     );
-    const newGameCandidates = diversifyRecommendationGames(
-      ranked.filter((candidate) => candidate.recommendationType === "new-game"),
-    );
-    const knownChannelCandidates = diversifyRecommendationGames(
-      ranked.filter((candidate) => candidate.recommendationType === "known-channel"),
-    );
-    const diversified = diversifyRecommendationGames(ranked);
     const selected = [];
     const selectedIds = new Set();
     const selectCandidate = (candidate) => {
@@ -296,19 +298,14 @@
       selectedIds.add(candidate.id);
     };
 
-    // Seed every available tab, then reserve more space for discovery.
-    [newChannelCandidates[0], newGameCandidates[0], knownChannelCandidates[0]].forEach(
-      selectCandidate,
-    );
-    newChannelCandidates
-      .slice(1, Math.max(1, Math.ceil(limit * 0.5)))
-      .forEach(selectCandidate);
-    newGameCandidates
-      .slice(1, Math.max(1, Math.ceil(limit * 0.25)))
-      .forEach(selectCandidate);
-    for (const candidate of diversified) {
-      if (selected.length >= limit) break;
-      selectCandidate(candidate);
+    while (
+      selected.length < limit &&
+      queues.some((queue) => queue.length)
+    ) {
+      for (const queue of queues) {
+        selectCandidate(queue.shift());
+        if (selected.length >= limit) break;
+      }
     }
     return selected;
   }
@@ -334,7 +331,7 @@
     );
     const selected = [];
 
-    for (const type of ["new-channel", "known-channel", "new-game"]) {
+    for (const type of RECOMMENDATION_TYPES) {
       const candidatesForType = diversifyRecommendationGames(
         ranked.filter((candidate) => candidate.recommendationType === type),
       );
@@ -350,6 +347,7 @@
   }
 
   root.CuratRecommendations = {
+    RECOMMENDATION_TYPES,
     normalizeRecommendationText,
     buildRecommendationProfile,
     recommendationType,

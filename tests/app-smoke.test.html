@@ -39,7 +39,9 @@
           Boolean(
               appDocument.querySelector("#icon-eye-off") &&
               appDocument.querySelector("#icon-user-x") &&
-              appDocument.querySelector("#icon-playlist-x"),
+              appDocument.querySelector("#icon-playlist-x") &&
+              appDocument.querySelector("#icon-user-plus") &&
+              appDocument.querySelector("#icon-user-check"),
           ),
         ],
         [
@@ -125,7 +127,7 @@
               appDocument.querySelector("#refreshRecommendations") &&
               appDocument.querySelectorAll(
                 "#recommendationTabs [data-recommendation-tab][role='tab']",
-              ).length === 3 &&
+              ).length === 4 &&
               appDocument
                 .querySelector("[data-recommendation-tab='new-channel']")
                 ?.textContent.includes("新しい投稿者") &&
@@ -134,7 +136,13 @@
                 ?.textContent.includes("追加済みの投稿者") &&
               appDocument
                 .querySelector("[data-recommendation-tab='new-game']")
-                ?.textContent.includes("新しいゲーム"),
+                ?.textContent.includes("新しいゲーム") &&
+              appDocument
+                .querySelector("[data-recommendation-tab='new-game-new-channel']")
+                ?.textContent.includes("新しいゲーム") &&
+              appDocument
+                .querySelector("[data-recommendation-tab='new-game-new-channel']")
+                ?.textContent.includes("新しい投稿者"),
           ),
         ],
         [

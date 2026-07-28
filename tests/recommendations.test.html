@@ -5,6 +5,7 @@
 <script src="../recommendations.js"></script>
 <script>
   const {
+    RECOMMENDATION_TYPES,
     buildRecommendationProfile,
     recommendationChannelKey,
     recommendationGameKey,
@@ -71,6 +72,11 @@
     "未登録の投稿者を判定する",
   );
   equal(
+    todoRanked.find((item) => item.id === "same-project").recommendationType,
+    "new-channel",
+    "登録済みゲームと未登録投稿者を新しい投稿者に分類する",
+  );
+  equal(
     todoRanked.find((item) => item.id === "same-channel").channelRelationship,
     "known",
     "登録済みと同じ投稿者を判定する",
@@ -123,6 +129,20 @@
     ).recommendationType,
     "known-channel",
     "登録済み投稿者による登録済みゲームを追加済み投稿者に分類する",
+  );
+  equal(
+    scoreRecommendationCandidate(
+      {
+        id: "new-game-new-channel",
+        title: "完全新規ゲーム 実況プレイ",
+        channelId: "brand-new-channel",
+        channelTitle: "初めての投稿者",
+        itemCount: 20,
+      },
+      todoProfile,
+    ).recommendationType,
+    "new-game-new-channel",
+    "ゲームと投稿者の両方が未登録なら専用タブに分類する",
   );
   equal(
     todoRanked.find((item) => item.id === "same-project").reasons[0],
@@ -207,14 +227,21 @@
         channelTitle: "実況者A",
         itemCount: 2,
       },
+      {
+        id: "seed-new-game-new-channel",
+        title: "完全新規ゲーム 実況",
+        channelId: "completely-new-channel",
+        channelTitle: "完全新規投稿者",
+        itemCount: 20,
+      },
     ],
     todoProfile,
-    3,
+    4,
   );
   equal(
     new Set(allTabsRanked.map((item) => item.recommendationType)).size,
-    3,
-    "候補がある場合は3タブすべての項目を結果に残す",
+    4,
+    "候補がある場合は4タブすべての項目を結果に残す",
   );
 
   const gameDiversityProfile = buildRecommendationProfile(
@@ -367,6 +394,13 @@
       channelTitle: "実況者A",
       itemCount: 100 - index,
     })),
+    ...Array.from({ length: 16 }, (_, index) => ({
+      id: `rotation-new-game-new-channel-${index}`,
+      title: `完全新規ゲーム${index} 実況`,
+      channelId: `rotation-completely-new-channel-${index}`,
+      channelTitle: `完全新規投稿者${index}`,
+      itemCount: 100 - index,
+    })),
   ];
   const firstRotation = rankRecommendationCandidatesByType(
     rotatingCandidates,
@@ -380,7 +414,8 @@
     {},
     firstRotation.map((item) => item.id),
   );
-  for (const type of ["new-channel", "known-channel", "new-game"]) {
+  equal(RECOMMENDATION_TYPES.length, 4, "おすすめ分類を4種類公開する");
+  for (const type of RECOMMENDATION_TYPES) {
     const firstIds = new Set(
       firstRotation
         .filter((item) => item.recommendationType === type)
