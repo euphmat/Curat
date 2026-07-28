@@ -823,18 +823,9 @@ body.is-resizing-sidebar {
 }
 
 .delete-all-button {
-  grid-auto-flow: column;
-  gap: 7px;
-  width: auto;
-  padding: 0 13px;
+  width: 46px;
+  padding: 0;
   color: var(--orange-dark);
-  font-size: 14px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.delete-all-button > span:first-child {
-  font-size: 18px;
 }
 
 .icon-button:hover,
@@ -6081,7 +6072,6 @@ body.detail-pinned .task-state-button {
 }
 
 @media (max-width: 520px) {
-  .topbar-eyebrow,
   .topbar-actions .delete-all-button {
     display: none;
   }
@@ -6091,12 +6081,9 @@ body.detail-pinned .task-state-button {
   }
 
   .header-add-button {
-    min-width: 48px;
-    padding-inline: 13px;
-  }
-
-  .header-add-button span {
-    display: none;
+    width: 46px;
+    min-width: 46px;
+    padding: 0;
   }
 
   .workspace .detail-layout {
@@ -6406,6 +6393,85 @@ body.detail-pinned .task-state-button {
   margin-bottom: 18px;
 }
 
+.recommendation-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(190, 173, 255, 0.18);
+  scrollbar-width: none;
+}
+
+.recommendation-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.recommendation-tab {
+  position: relative;
+  display: inline-flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 16px;
+  color: #948ca6;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.recommendation-tab::after {
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 2px;
+  content: "";
+  background: linear-gradient(90deg, #d8bdff, #8ceaf5);
+  border-radius: 999px 999px 0 0;
+  opacity: 0;
+  transform: scaleX(0.65);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.recommendation-tab:hover {
+  color: #d9d1e8;
+}
+
+.recommendation-tab.is-active {
+  color: #f2ecfb;
+}
+
+.recommendation-tab.is-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.recommendation-tab:focus-visible {
+  outline: 2px solid rgba(140, 234, 245, 0.72);
+  outline-offset: -3px;
+  border-radius: 8px 8px 0 0;
+}
+
+.recommendation-tab-count {
+  min-width: 20px;
+  padding: 2px 6px;
+  color: #aca2bd;
+  font-size: 9px;
+  line-height: 1.4;
+  text-align: center;
+  background: rgba(100, 85, 139, 0.35);
+  border-radius: 999px;
+}
+
+.recommendation-tab.is-active .recommendation-tab-count {
+  color: #c7f6fb;
+  background: rgba(74, 196, 219, 0.15);
+}
+
 .recommendation-toolbar {
   display: flex;
   align-items: center;
@@ -6505,6 +6571,11 @@ body.detail-pinned .task-state-button {
   box-shadow: inset 2px 0 rgba(126, 231, 244, 0.36);
 }
 
+.recommendation-card.is-new-game {
+  border-color: rgba(244, 198, 126, 0.25);
+  box-shadow: inset 2px 0 rgba(244, 198, 126, 0.4);
+}
+
 .recommendation-thumbnail {
   position: relative;
   grid-row: 1 / -1;
@@ -6574,6 +6645,12 @@ body.detail-pinned .task-state-button {
   background: rgba(74, 196, 219, 0.14);
   border: 1px solid rgba(126, 231, 244, 0.25);
   border-radius: 999px;
+}
+
+.recommendation-channel b.is-new-game {
+  color: #ffe0a9;
+  background: rgba(226, 164, 69, 0.13);
+  border-color: rgba(244, 198, 126, 0.25);
 }
 
 .recommendation-reasons {
@@ -6718,10 +6795,6 @@ body.detail-pinned .task-state-button {
     padding: 0;
   }
 
-  .recommendations-button span {
-    display: none;
-  }
-
   .recommendation-group-list,
   .recommendation-loading {
     grid-template-columns: minmax(0, 1fr);
@@ -6740,7 +6813,7 @@ body.detail-pinned .task-state-button {
 
 @media (max-width: 520px) {
   .recommendations-button {
-    display: inline-flex;
+    display: grid;
   }
 
   .recommendation-toolbar {
@@ -6750,6 +6823,12 @@ body.detail-pinned .task-state-button {
 
   .recommendation-toolbar .secondary-button {
     justify-content: center;
+  }
+
+  .recommendation-tab {
+    flex-basis: auto;
+    min-width: 132px;
+    padding-inline: 12px;
   }
 
   .recommendation-card {

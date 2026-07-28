@@ -113,7 +113,13 @@
           Boolean(
             appDocument.querySelector("#openRecommendations") &&
               appDocument.querySelector("#recommendationDialog #recommendationResults") &&
-              appDocument.querySelector("#refreshRecommendations"),
+              appDocument.querySelector("#refreshRecommendations") &&
+              appDocument.querySelectorAll(
+                "#recommendationTabs [data-recommendation-tab][role='tab']",
+              ).length === 3 &&
+              appDocument.querySelector("[data-recommendation-tab='new-channel']")?.textContent.includes("新しい投稿者") &&
+              appDocument.querySelector("[data-recommendation-tab='known-channel']")?.textContent.includes("追加済みの投稿者") &&
+              appDocument.querySelector("[data-recommendation-tab='new-game']")?.textContent.includes("新しいゲーム"),
           ),
         ],
         [

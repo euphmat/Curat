@@ -7,6 +7,7 @@
   const {
     buildRecommendationProfile,
     rankRecommendationCandidates,
+    scoreRecommendationCandidate,
   } = window.CuratRecommendations;
   const failures = [];
   let assertions = 0;
@@ -70,6 +71,25 @@
     "登録済みと同じ投稿者を判定する",
   );
   equal(
+    todoRanked.find((item) => item.id === "same-channel").recommendationType,
+    "new-game",
+    "登録済み投稿者の未登録ゲームを新しいゲームに分類する",
+  );
+  equal(
+    scoreRecommendationCandidate(
+      {
+        id: "known-channel-known-game",
+        title: "ゼルダの伝説 実況 Part 2",
+        channelId: "channel-a",
+        channelTitle: "実況者A",
+        itemCount: 20,
+      },
+      todoProfile,
+    ).recommendationType,
+    "known-channel",
+    "登録済み投稿者による登録済みゲームを追加済み投稿者に分類する",
+  );
+  equal(
     todoRanked.find((item) => item.id === "same-project").reasons[0],
     "登録済みの「ゼルダの伝説」に関連",
     "作品との関連理由を表示する",
@@ -99,6 +119,33 @@
     diversityRanked.some((item) => item.id === "only-new-channel"),
     true,
     "同じ投稿者の高評価候補が多くても未登録投稿者を結果に含める",
+  );
+
+  const newGameDiversityRanked = rankRecommendationCandidates(
+    [
+      ...Array.from({ length: 4 }, (_, index) => ({
+        id: `new-channel-${index}`,
+        title: `ゼルダの伝説 実況 ${index}`,
+        channelId: `channel-new-${index}`,
+        channelTitle: `新しい実況者${index}`,
+        sourceProjectNames: new Set(["ゼルダの伝説"]),
+        itemCount: 100 - index,
+      })),
+      {
+        id: "only-new-game",
+        title: "未登録ゲーム 実況",
+        channelId: "channel-a",
+        channelTitle: "実況者A",
+        itemCount: 2,
+      },
+    ],
+    todoProfile,
+    3,
+  );
+  equal(
+    newGameDiversityRanked.some((item) => item.id === "only-new-game"),
+    true,
+    "未登録投稿者の候補が多くても新しいゲームを結果に含める",
   );
 
   const doneSeries = structuredClone(baseSeries);

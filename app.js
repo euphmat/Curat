@@ -41,6 +41,7 @@ const {
 const { compareFolderNames } = window.CuratFolderOrder;
 const {
   buildRecommendationProfile,
+  recommendationType,
   rankRecommendationCandidates,
 } = window.CuratRecommendations;
 const {
@@ -175,6 +176,7 @@ const elements = {
   deleteAll: $("#deleteAll"),
   openRecommendations: $("#openRecommendations"),
   recommendationDialog: $("#recommendationDialog"),
+  recommendationTabs: $("#recommendationTabs"),
   recommendationStatus: $("#recommendationStatus"),
   recommendationResults: $("#recommendationResults"),
   refreshRecommendations: $("#refreshRecommendations"),
@@ -280,6 +282,7 @@ let recommendationLoading = false;
 let recommendationError = "";
 let recommendationLastUpdatedAt = "";
 let recommendationSourceSignature = "";
+let activeRecommendationTab = "new-channel";
 let cloudState = {
   configured: false,
   phase: "not-configured",
@@ -874,8 +877,9 @@ async function hydrateRegisteredPlaylistChannels() {
 
 function recommendationCardHtml(candidate) {
   const isNewChannel = candidate.channelRelationship === "new";
+  const isNewGame = recommendationType(candidate) === "new-game";
   return `
-    <article class="recommendation-card${isNewChannel ? " is-new-channel" : ""}" data-recommendation-id="${escapeHtml(candidate.id)}">
+    <article class="recommendation-card${isNewChannel ? " is-new-channel" : ""}${isNewGame ? " is-new-game" : ""}" data-recommendation-id="${escapeHtml(candidate.id)}">
       <a
         class="recommendation-thumbnail"
         href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
@@ -891,6 +895,7 @@ function recommendationCardHtml(candidate) {
         <p class="recommendation-channel">
           <span>${escapeHtml(candidate.channelTitle || "投稿者名未取得")}</span>
           ${isNewChannel ? '<b>新しい投稿者</b>' : ""}
+          ${isNewGame ? '<b class="is-new-game">新しいゲーム</b>' : ""}
         </p>
         <div class="recommendation-reasons">
           ${(candidate.reasons || [])
@@ -918,27 +923,51 @@ function recommendationCardHtml(candidate) {
   `;
 }
 
-function recommendationGroupHtml(title, description, candidates, kind) {
-  if (!candidates.length) return "";
-  return `
-    <section class="recommendation-group is-${kind}">
-      <header class="recommendation-group-head">
-        <div>
-          <span>${kind === "new" ? "DISCOVER" : "FAMILIAR"}</span>
-          <h3>${escapeHtml(title)}</h3>
-        </div>
-        <p>${escapeHtml(description)}</p>
-      </header>
-      <div class="recommendation-group-list">
-        ${candidates.map(recommendationCardHtml).join("")}
-      </div>
-    </section>
-  `;
+const RECOMMENDATION_TABS = {
+  "new-channel": {
+    id: "recommendationTabNewChannel",
+    label: "新しい投稿者",
+    emptyTitle: "新しい投稿者の候補がありません",
+    emptyCopy: "登録済みのゲームに関連する別の投稿者が見つかると、ここに表示します。",
+  },
+  "known-channel": {
+    id: "recommendationTabKnownChannel",
+    label: "追加済みの投稿者",
+    emptyTitle: "追加済みの投稿者から候補がありません",
+    emptyCopy: "登録済みの投稿者が同じゲームの別シリーズを公開すると、ここに表示します。",
+  },
+  "new-game": {
+    id: "recommendationTabNewGame",
+    label: "新しいゲーム",
+    emptyTitle: "新しいゲームの候補がありません",
+    emptyCopy: "登録済みの投稿者による、ライブラリにないゲームが見つかると、ここに表示します。",
+  },
+};
+
+function recommendationCandidatesByType(type) {
+  return recommendationCandidates.filter(
+    (candidate) => recommendationType(candidate) === type,
+  );
+}
+
+function updateRecommendationTabs() {
+  for (const button of $$("[data-recommendation-tab]", elements.recommendationTabs)) {
+    const type = button.dataset.recommendationTab;
+    const isActive = type === activeRecommendationTab;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+    button.tabIndex = isActive ? 0 : -1;
+    const count = $(".recommendation-tab-count", button);
+    if (count) count.textContent = recommendationCandidatesByType(type).length;
+  }
+  const tab = RECOMMENDATION_TABS[activeRecommendationTab];
+  elements.recommendationResults.setAttribute("aria-labelledby", tab.id);
 }
 
 function renderRecommendationResults() {
   elements.refreshRecommendations.disabled = recommendationLoading;
   elements.recommendationDialog.classList.toggle("is-loading", recommendationLoading);
+  updateRecommendationTabs();
 
   if (recommendationLoading) {
     elements.recommendationStatus.textContent = "YouTube から候補を探しています…";
@@ -974,14 +1003,10 @@ function renderRecommendationResults() {
     return;
   }
 
-  const newChannelCandidates = recommendationCandidates.filter(
-    (candidate) => candidate.channelRelationship === "new",
-  );
-  const knownChannelCandidates = recommendationCandidates.filter(
-    (candidate) => candidate.channelRelationship !== "new",
-  );
+  const activeTab = RECOMMENDATION_TABS[activeRecommendationTab];
+  const visibleCandidates = recommendationCandidatesByType(activeRecommendationTab);
   elements.recommendationStatus.textContent = recommendationCandidates.length
-    ? `${recommendationCandidates.length} 件中 ${newChannelCandidates.length} 件は新しい投稿者 · ${formatDate(recommendationLastUpdatedAt)} 更新`
+    ? `${activeTab.label} ${visibleCandidates.length} 件 · 全 ${recommendationCandidates.length} 件 · ${formatDate(recommendationLastUpdatedAt)} 更新`
     : `${formatDate(recommendationLastUpdatedAt)} 更新`;
   if (!recommendationCandidates.length) {
     elements.recommendationResults.innerHTML = `
@@ -994,20 +1019,22 @@ function renderRecommendationResults() {
     return;
   }
 
-  elements.recommendationResults.innerHTML = [
-    recommendationGroupHtml(
-      "新しい投稿者から",
-      "登録済みの作品に関連する、まだライブラリにない投稿者です。",
-      newChannelCandidates,
-      "new",
-    ),
-    recommendationGroupHtml(
-      "同じ投稿者から",
-      "登録済みプレイリストと同じ投稿者の別シリーズです。",
-      knownChannelCandidates,
-      "known",
-    ),
-  ].join("");
+  if (!visibleCandidates.length) {
+    elements.recommendationResults.innerHTML = `
+      <div class="recommendation-empty">
+        ${icon(activeRecommendationTab === "new-game" ? "gamepad" : "search")}
+        <strong>${escapeHtml(activeTab.emptyTitle)}</strong>
+        <span>${escapeHtml(activeTab.emptyCopy)}</span>
+      </div>
+    `;
+    return;
+  }
+
+  elements.recommendationResults.innerHTML = `
+    <div class="recommendation-group-list">
+      ${visibleCandidates.map(recommendationCardHtml).join("")}
+    </div>
+  `;
 }
 
 async function loadRecommendations() {
@@ -1430,7 +1457,7 @@ function setFormLoading(isLoading, message = "") {
 
 function setFormMessage(message, isError = true) {
   elements.formMessage.textContent = message;
-  elements.formMessage.style.color = isError ? "var(--orange-dark)" : "var(--ink-soft)";
+  if (isError && message) showToast(message, true);
 }
 
 function renderWorkspaceEmpty() {
@@ -3214,6 +3241,27 @@ elements.syncAll.addEventListener("click", syncAllSeries);
 elements.deleteAll.addEventListener("click", deleteAllPlaylistsAndFolders);
 elements.openRecommendations.addEventListener("click", openRecommendationDialog);
 elements.refreshRecommendations.addEventListener("click", loadRecommendations);
+elements.recommendationTabs.addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-recommendation-tab]");
+  if (!tab) return;
+  activeRecommendationTab = tab.dataset.recommendationTab;
+  renderRecommendationResults();
+});
+elements.recommendationTabs.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = $$("[data-recommendation-tab]", elements.recommendationTabs);
+  const currentIndex = tabs.indexOf(event.target.closest("[data-recommendation-tab]"));
+  if (currentIndex < 0) return;
+  let nextIndex = currentIndex;
+  if (event.key === "Home") nextIndex = 0;
+  if (event.key === "End") nextIndex = tabs.length - 1;
+  if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+  event.preventDefault();
+  activeRecommendationTab = tabs[nextIndex].dataset.recommendationTab;
+  renderRecommendationResults();
+  tabs[nextIndex].focus();
+});
 $("#closeRecommendations").addEventListener("click", () =>
   elements.recommendationDialog.close(),
 );

@@ -103,6 +103,13 @@
     );
   }
 
+  function recommendationType(candidate) {
+    if (candidate?.gameRelationship === "new") return "new-game";
+    return candidate?.channelRelationship === "new"
+      ? "new-channel"
+      : "known-channel";
+  }
+
   function scoreRecommendationCandidate(candidate, profile) {
     const text = candidateText(candidate);
     let score = 0;
@@ -133,6 +140,8 @@
     if (matchingProject) {
       score += 38 + Math.min(10, matchingProject.count * 2);
       reasons.push(`登録済みの「${matchingProject.name}」に関連`);
+    } else if (matchingChannel) {
+      reasons.push("ライブラリにないゲームの候補");
     }
 
     const itemCount = Number(candidate.itemCount) || 0;
@@ -142,11 +151,16 @@
     }
     if (itemCount <= 1) score -= 12;
 
-    return {
+    const scoredCandidate = {
       ...candidate,
       score,
       channelRelationship: matchingChannel ? "known" : "new",
+      gameRelationship: matchingProject ? "known" : "new",
       reasons: uniqueValues(reasons).slice(0, 2),
+    };
+    return {
+      ...scoredCandidate,
+      recommendationType: recommendationType(scoredCandidate),
     };
   }
 
@@ -169,16 +183,18 @@
           left.title.localeCompare(right.title, "ja"),
       );
 
-    // Prefer discovery outside known uploaders while retaining a few familiar
-    // channels when they are especially relevant.
+    // Keep each discovery tab useful before filling the remaining slots by
+    // overall relevance.
     const newChannelCandidates = ranked.filter(
-      (candidate) => candidate.channelRelationship === "new",
+      (candidate) => candidate.recommendationType === "new-channel",
     );
-    const newChannelTarget = Math.min(
-      newChannelCandidates.length,
-      Math.max(1, Math.ceil(limit * 0.67)),
+    const newGameCandidates = ranked.filter(
+      (candidate) => candidate.recommendationType === "new-game",
     );
-    const selected = newChannelCandidates.slice(0, newChannelTarget);
+    const selected = [
+      ...newChannelCandidates.slice(0, Math.max(1, Math.ceil(limit * 0.5))),
+      ...newGameCandidates.slice(0, Math.max(1, Math.ceil(limit * 0.25))),
+    ].slice(0, limit);
     const selectedIds = new Set(selected.map((candidate) => candidate.id));
     for (const candidate of ranked) {
       if (selected.length >= limit) break;
@@ -192,6 +208,7 @@
   root.CuratRecommendations = {
     normalizeRecommendationText,
     buildRecommendationProfile,
+    recommendationType,
     scoreRecommendationCandidate,
     rankRecommendationCandidates,
   };

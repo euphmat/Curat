@@ -211,8 +211,48 @@
           <button class="close-button" id="closeRecommendations" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
         </div>
         <p class="sheet-lead recommendation-lead">
-          登録済みプレイリストの作品名と投稿者を手がかりにYouTube全体から探し、未登録の投稿者を優先します。視聴状況は使用しません。
+          登録済みプレイリストの作品名と投稿者を手がかりにYouTube全体から探します。視聴状況は使用しません。
         </p>
+        <div class="recommendation-tabs" id="recommendationTabs" role="tablist" aria-label="おすすめの分類">
+          <button
+            class="recommendation-tab is-active"
+            id="recommendationTabNewChannel"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="recommendationResults"
+            data-recommendation-tab="new-channel"
+          >
+            <span>新しい投稿者</span>
+            <b class="recommendation-tab-count" aria-hidden="true">0</b>
+          </button>
+          <button
+            class="recommendation-tab"
+            id="recommendationTabKnownChannel"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="recommendationResults"
+            tabindex="-1"
+            data-recommendation-tab="known-channel"
+          >
+            <span>追加済みの投稿者</span>
+            <b class="recommendation-tab-count" aria-hidden="true">0</b>
+          </button>
+          <button
+            class="recommendation-tab"
+            id="recommendationTabNewGame"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="recommendationResults"
+            tabindex="-1"
+            data-recommendation-tab="new-game"
+          >
+            <span>新しいゲーム</span>
+            <b class="recommendation-tab-count" aria-hidden="true">0</b>
+          </button>
+        </div>
         <div class="recommendation-toolbar">
           <p id="recommendationStatus" role="status" aria-live="polite"></p>
           <button class="secondary-button" id="refreshRecommendations" type="button">
@@ -220,7 +260,13 @@
             <span>候補を更新</span>
           </button>
         </div>
-        <div class="recommendation-results" id="recommendationResults"></div>
+        <div
+          class="recommendation-results"
+          id="recommendationResults"
+          role="tabpanel"
+          aria-labelledby="recommendationTabNewChannel"
+          tabindex="0"
+        ></div>
       </div>
     </dialog>
 
