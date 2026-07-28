@@ -2,8 +2,17 @@
 <meta charset="utf-8" />
 <title>RUNNING</title>
 <pre id="result">running</pre>
-<iframe src="../index.html" hidden></iframe>
+<iframe hidden></iframe>
 <script>
+  const previousBrowserSettings = localStorage.getItem("curat-browser-settings-v1");
+  localStorage.setItem(
+    "curat-browser-settings-v1",
+    JSON.stringify({
+      apiKey: "test-api-key",
+      username: "test@example.com",
+      password: "test-password",
+    }),
+  );
   const frame = document.querySelector("iframe");
   frame.addEventListener("load", () => {
     setTimeout(() => {
@@ -56,6 +65,10 @@
           Boolean(appDocument.querySelector(".topbar > #playlistForm #playlistUrl")),
         ],
         [
+          "ヘッダーのメニューボタンが廃止されている",
+          !appDocument.querySelector(".topbar #mobileMenu, .topbar .mobile-menu"),
+        ],
+        [
           "新規フォルダーを Enter キーで保存できる",
           appDocument.querySelectorAll("#folderForm button[type='submit']").length === 1 &&
             appDocument.querySelector("#folderForm button[type='submit']")?.id === "saveFolder" &&
@@ -94,7 +107,7 @@
           "API キーを Enter キーで保存できる",
           appDocument.querySelector("#settingsForm #saveSettings")?.type === "submit" &&
             appDocument.querySelector("#saveSettings")?.hasAttribute("data-default-action") &&
-            appDocument.querySelector("#settingsForm .close-button")?.type === "button",
+            appDocument.querySelector("#settingsDialog .close-button")?.type === "button",
         ],
         [
           "Firebase 同期のログイン UI と状態表示がある",
@@ -106,9 +119,19 @@
           ),
         ],
         [
-          "設定と手動バックアップの操作だけが表示されている",
-          appDocument.querySelectorAll("#settingsForm .settings-section").length === 1 &&
-            appDocument.querySelectorAll(".backup-actions .backup-action-card").length === 2,
+          "設定と保存データが同じモーダルに統合されている",
+          Boolean(
+            appDocument.querySelector("#settingsDialog #settingsForm #apiKeyInput") &&
+              appDocument.querySelector("#settingsDialog #cloudLoginForm") &&
+              appDocument.querySelector("#settingsDialog .backup-actions") &&
+              !appDocument.querySelector("#backupDialog"),
+          ),
+        ],
+        [
+          "API キーとログイン情報がブラウザから復元される",
+          appDocument.querySelector("#apiKeyInput")?.value === "test-api-key" &&
+            appDocument.querySelector("#cloudEmail")?.value === "test@example.com" &&
+            appDocument.querySelector("#cloudPassword")?.value === "test-password",
         ],
         [
           "JSON のエクスポートとインポートが残っている",
@@ -135,6 +158,12 @@
         ? `FAIL ${failures.join(", ")}`
         : `PASS ${checks.length}/${checks.length}`;
       document.title = failures.length ? "FAIL" : "PASS";
+      if (previousBrowserSettings === null) {
+        localStorage.removeItem("curat-browser-settings-v1");
+      } else {
+        localStorage.setItem("curat-browser-settings-v1", previousBrowserSettings);
+      }
     }, 500);
   });
+  frame.src = "../index.html";
 </script>

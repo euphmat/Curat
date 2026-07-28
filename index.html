@@ -26,7 +26,6 @@
         <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
         <symbol id="icon-external-link" viewBox="0 0 24 24"><path d="M15 4h5v5M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></symbol>
         <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
-        <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
         <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5"/><path d="M18.2 15a7 7 0 1 1-.3-6.4L20 12"/></symbol>
         <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></symbol>
         <symbol id="icon-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M14 7l5 5-5 5"/></symbol>
@@ -51,8 +50,6 @@
         <symbol id="icon-list-video" viewBox="0 0 24 24"><path d="M4 6h10M4 12h7M4 18h10"/><path d="m16 11 5 3-5 3Z"/></symbol>
         <symbol id="icon-edit" viewBox="0 0 24 24"><path d="m14 5 5 5L8 21H3v-5Z"/><path d="m12 7 5 5"/></symbol>
         <symbol id="icon-move" viewBox="0 0 24 24"><path d="M5 8h11M12 4l4 4-4 4M19 16H8M12 12l-4 4 4 4"/></symbol>
-        <symbol id="icon-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M9 9h12"/></symbol>
-        <symbol id="icon-panel-left-close" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M17 8l-4 4 4 4"/></symbol>
         <symbol id="icon-pin" viewBox="0 0 24 24"><path d="m14 4 6 6-3 1-4 4-1 4-7-7 4-1 4-4Z"/><path d="m10 19-5 5"/></symbol>
         <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
         <symbol id="icon-check-all" viewBox="0 0 24 24"><path d="m2.5 12 4 4 8-9"/><path d="m10 15 2.5 2.5L21.5 8"/></symbol>
@@ -121,23 +118,10 @@
             </span>
           </button>
 
-          <div class="sidebar-footer-actions">
-            <button class="nav-item settings-link" id="openSettings" type="button">
-              <span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#icon-settings"></use></svg></span>
-              <span>設定</span>
-            </button>
-
-            <button
-              class="sidebar-hide-button"
-              id="sidebarHide"
-              type="button"
-              aria-controls="sidebar"
-              aria-label="左サイドバーを隠す"
-            >
-              <svg class="icon" aria-hidden="true"><use href="#icon-panel-left-close"></use></svg>
-              <span>サイドバーを隠す</span>
-            </button>
-          </div>
+          <button class="nav-item settings-link" id="openSettings" type="button">
+            <span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#icon-settings"></use></svg></span>
+            <span>設定</span>
+          </button>
         </div>
 
         <div
@@ -155,14 +139,6 @@
 
       <main class="main">
         <header class="topbar">
-          <button
-            class="mobile-menu"
-            id="mobileMenu"
-            type="button"
-            aria-controls="sidebar"
-            aria-expanded="true"
-            aria-label="左サイドバーを隠す"
-          ><svg class="icon" aria-hidden="true"><use href="#icon-menu"></use></svg></button>
           <div class="topbar-title">
             <span class="topbar-eyebrow">PLAYLIST WORKSPACE</span>
             <h1 id="viewTitle">実況ライブラリ</h1>
@@ -207,111 +183,107 @@
       </main>
     </div>
 
-    <div class="sidebar-scrim" id="sidebarScrim"></div>
-
-    <dialog class="sheet-dialog" id="settingsDialog">
-      <form method="dialog" class="sheet" id="settingsForm">
+    <dialog class="sheet-dialog settings-data-dialog" id="settingsDialog">
+      <div class="sheet">
         <div class="sheet-head">
           <div>
-            <h2>設定</h2>
+            <h2>設定と保存データ</h2>
           </div>
-          <button class="close-button" value="cancel" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
+          <button class="close-button" id="closeSettings" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
         </div>
 
         <div class="settings-section">
           <h3>YouTube API 設定</h3>
           <p class="sheet-lead">
-            静的サイトからプレイリストを取得するため、YouTube Data API v3 の API キーをこのセッションで使用します。
+            静的サイトからプレイリストを取得するため、YouTube Data API v3 の API キーを使用します。
           </p>
-          <label class="field">
-            <span>API キー</span>
-            <div class="secret-field">
-              <input id="apiKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
-              <button id="toggleKey" type="button" aria-label="API キーを表示"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg><span>表示</span></button>
+          <form id="settingsForm">
+            <label class="field">
+              <span>API キー</span>
+              <div class="secret-field">
+                <input id="apiKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
+                <button id="toggleKey" type="button" aria-label="API キーを表示"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg><span>表示</span></button>
+              </div>
+              <small>このブラウザに保存されます。手動バックアップには含まれません。</small>
+            </label>
+            <div class="info-box">
+              <strong>安全に使うための設定</strong>
+              <p>
+                Google Cloud Console で YouTube Data API v3 を有効化し、キーの「ウェブサイトの制限」に公開予定の
+                GitHub Pages URL を登録してください。
+              </p>
             </div>
-            <small>キーは保存されず、ページを再読み込みすると再入力が必要です。エクスポートにも含まれません。</small>
-          </label>
-          <div class="info-box">
-            <strong>安全に使うための設定</strong>
-            <p>
-              Google Cloud Console で YouTube Data API v3 を有効化し、キーの「ウェブサイトの制限」に公開予定の
-              GitHub Pages URL を登録してください。
-            </p>
-          </div>
+            <div class="sheet-actions settings-section-actions">
+              <a
+                class="secondary-button"
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noreferrer"
+              ><svg class="icon" aria-hidden="true"><use href="#icon-external-link"></use></svg>Cloud Console</a>
+              <button class="primary-button" id="saveSettings" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>API キーを保存</button>
+            </div>
+          </form>
         </div>
 
-        <div class="sheet-actions">
-          <a
-            class="secondary-button"
-            href="https://console.cloud.google.com/apis/credentials"
-            target="_blank"
-            rel="noreferrer"
-          ><svg class="icon" aria-hidden="true"><use href="#icon-external-link"></use></svg>Cloud Console</a>
-          <button class="primary-button" id="saveSettings" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>設定を適用</button>
+        <div class="settings-section">
+          <h3>クラウド同期</h3>
+          <p class="sheet-lead">
+            ログインすると、進捗を Firebase に保存し、iPad とパソコンの間でも自動同期します。
+          </p>
+          <div class="save-status" id="saveStatusPanel">
+            <span class="status-light"></span>
+            <div>
+              <strong id="saveStatusTitle">Firebase へ接続中</strong>
+              <p id="saveStatusCopy">接続後に Firebase のデータを読み込みます。</p>
+            </div>
+          </div>
+          <div class="cloud-setup-notice" id="cloudSetupNotice">
+            <strong>クラウド同期の初期設定が必要です</strong>
+            <p><code>firebase-config.js</code> を設定して GitHub Pages へ反映してください。詳しい手順は Readme にあります。</p>
+          </div>
+          <form class="cloud-login-form" id="cloudLoginForm" hidden>
+            <label>
+              <span>ユーザー名（メールアドレス）</span>
+              <input id="cloudEmail" type="email" autocomplete="username" required />
+            </label>
+            <label>
+              <span>パスワード</span>
+              <input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" required />
+            </label>
+            <button class="primary-button" id="cloudLogin" type="submit">
+              <svg class="icon" aria-hidden="true"><use href="#icon-cloud"></use></svg>同期へログイン
+            </button>
+          </form>
+          <div class="cloud-account" id="cloudAccount" hidden>
+            <span><small>ログイン中</small><strong id="cloudAccountEmail"></strong></span>
+            <button class="secondary-button" id="cloudLogout" type="button">ログアウト</button>
+          </div>
+          <small class="browser-storage-note">ユーザー名とパスワードは、このブラウザ内に保存されます。</small>
         </div>
-      </form>
-    </dialog>
 
-    <dialog class="sheet-dialog" id="backupDialog">
-      <div class="sheet">
-        <div class="sheet-head">
-          <div>
-            <h2>データの保存と復元</h2>
+        <div class="settings-section">
+          <h3>手動バックアップ</h3>
+          <div class="backup-actions">
+            <button class="backup-action-card" id="downloadSave" type="button">
+              <span class="action-icon"><svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg></span>
+              <span><strong>バックアップを保存</strong><small>JSON ファイルとしてダウンロード</small></span>
+              <svg class="icon action-arrow" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>
+            </button>
+            <button class="backup-action-card" id="restoreSave" type="button">
+              <span class="action-icon"><svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg></span>
+              <span><strong>バックアップから復元</strong><small>以前の JSON ファイルを読み込む</small></span>
+              <svg class="icon action-arrow" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>
+            </button>
+            <input id="restoreInput" type="file" accept="application/json,.json" hidden />
           </div>
-          <button class="close-button" id="closeBackup" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
-        </div>
-        <p class="sheet-lead">
-          進捗は Firebase のみに保存されます。ログインすると、iPad とパソコンの間でも自動同期されます。
-        </p>
-        <div class="save-status" id="saveStatusPanel">
-          <span class="status-light"></span>
-          <div>
-            <strong id="saveStatusTitle">Firebase へ接続中</strong>
-            <p id="saveStatusCopy">接続後に Firebase のデータを読み込みます。</p>
+          <div class="rule-box">
+            <strong>保存ルール</strong>
+            <ol>
+              <li>ログイン中の変更は Firebase へ自動保存</li>
+              <li>ログアウト中の変更はページを閉じると失われます</li>
+              <li>API キーとログイン情報はこのブラウザだけに保存し、バックアップには含めません</li>
+            </ol>
           </div>
-        </div>
-        <div class="cloud-setup-notice" id="cloudSetupNotice">
-          <strong>クラウド同期の初期設定が必要です</strong>
-          <p><code>firebase-config.js</code> を設定して GitHub Pages へ反映してください。詳しい手順は Readme にあります。</p>
-        </div>
-        <form class="cloud-login-form" id="cloudLoginForm" hidden>
-          <label>
-            <span>メールアドレス</span>
-            <input id="cloudEmail" type="email" autocomplete="username" required />
-          </label>
-          <label>
-            <span>パスワード</span>
-            <input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" required />
-          </label>
-          <button class="primary-button" id="cloudLogin" type="submit">
-            <svg class="icon" aria-hidden="true"><use href="#icon-cloud"></use></svg>同期へログイン
-          </button>
-        </form>
-        <div class="cloud-account" id="cloudAccount" hidden>
-          <span><small>ログイン中</small><strong id="cloudAccountEmail"></strong></span>
-          <button class="secondary-button" id="cloudLogout" type="button">ログアウト</button>
-        </div>
-        <p class="backup-subtitle">手動バックアップ</p>
-        <div class="backup-actions">
-          <button class="backup-action-card" id="downloadSave" type="button">
-            <span class="action-icon"><svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg></span>
-            <span><strong>バックアップを保存</strong><small>JSON ファイルとしてダウンロード</small></span>
-            <svg class="icon action-arrow" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>
-          </button>
-          <button class="backup-action-card" id="restoreSave" type="button">
-            <span class="action-icon"><svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg></span>
-            <span><strong>バックアップから復元</strong><small>以前の JSON ファイルを読み込む</small></span>
-            <svg class="icon action-arrow" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>
-          </button>
-          <input id="restoreInput" type="file" accept="application/json,.json" hidden />
-        </div>
-        <div class="rule-box">
-          <strong>保存ルール</strong>
-          <ol>
-            <li>ログイン中の変更は Firebase へ自動保存</li>
-            <li>ログアウト中の変更はページを閉じると失われます</li>
-            <li>API キーは保存せず、エクスポートにも含めません</li>
-          </ol>
         </div>
       </div>
     </dialog>

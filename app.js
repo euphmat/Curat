@@ -2,6 +2,7 @@ import { CloudSync } from "./cloud-sync.js";
 
 const APP_VERSION = 1;
 const API_BASE = "https://www.googleapis.com/youtube/v3";
+const BROWSER_SETTINGS_KEY = "curat-browser-settings-v1";
 const RECENT_FOLDER_ICONS_KEY = "curat-recent-folder-icons-v1";
 const RECENT_FOLDER_ICONS_LIMIT = 6;
 const SIDEBAR_MIN_WIDTH = 300;
@@ -80,7 +81,6 @@ const elements = {
   detailContent: $("#detailContent"),
   settingsDialog: $("#settingsDialog"),
   apiKey: $("#apiKeyInput"),
-  backupDialog: $("#backupDialog"),
   backupStatus: $("#backupStatus"),
   saveStatusTitle: $("#saveStatusTitle"),
   saveStatusCopy: $("#saveStatusCopy"),
@@ -114,14 +114,33 @@ const elements = {
   folderIconSelection: $("#folderIconSelection"),
   contextMenu: $("#treeContextMenu"),
   confirmDialog: $("#confirmDialog"),
-  sidebar: $("#sidebar"),
   sidebarResizer: $("#sidebarResizer"),
-  sidebarHide: $("#sidebarHide"),
-  mobileMenu: $("#mobileMenu"),
 };
 
+function loadBrowserSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BROWSER_SETTINGS_KEY) || "{}");
+    return {
+      apiKey: String(saved.apiKey || ""),
+      username: String(saved.username || ""),
+      password: String(saved.password || ""),
+    };
+  } catch {
+    return { apiKey: "", username: "", password: "" };
+  }
+}
+
+function saveBrowserSettings() {
+  try {
+    localStorage.setItem(BROWSER_SETTINGS_KEY, JSON.stringify(browserSettings));
+  } catch {
+    showToast("ブラウザに設定を保存できませんでした", true);
+  }
+}
+
+let browserSettings = loadBrowserSettings();
 let data = defaultData();
-let config = { apiKey: "" };
+let config = { apiKey: browserSettings.apiKey };
 let detailSeriesId = null;
 let pendingPlaylistUrl = "";
 let editingProjectSeriesId = null;
@@ -154,6 +173,10 @@ let cloudState = {
   error: "",
 };
 let applyingCloudData = false;
+elements.apiKey.value = browserSettings.apiKey;
+elements.cloudEmail.value = browserSettings.username;
+elements.cloudPassword.value = browserSettings.password;
+
 const cloudSync = new CloudSync({
   getLocalData: () => data,
   onRemoteData: (remoteData) => {
@@ -186,9 +209,6 @@ const cloudSync = new CloudSync({
   },
 });
 
-if (config.sidebarCollapsed && window.matchMedia("(min-width: 781px)").matches) {
-  document.body.classList.add("sidebar-collapsed");
-}
 if (Number.isFinite(config.sidebarWidth)) {
   const sidebarWidth = Math.min(
     SIDEBAR_MAX_WIDTH,
@@ -780,18 +800,6 @@ function revealImportedPlaylist(series) {
   config.expandedProjects[series.project] = true;
   selectedTreeKey = `playlist:${series.id}`;
 
-  const mobile = window.matchMedia("(max-width: 780px)").matches;
-  const sidebarWasHidden = mobile
-    ? !document.body.classList.contains("sidebar-open")
-    : document.body.classList.contains("sidebar-collapsed");
-  if (mobile) {
-    renderProjectTree();
-    return;
-  } else {
-    document.body.classList.remove("sidebar-collapsed");
-    config.sidebarCollapsed = false;
-  }
-  updateSidebarControls();
   renderProjectTree();
 
   const startHighlight = () => {
@@ -824,19 +832,22 @@ function revealImportedPlaylist(series) {
     }, 3000);
   };
 
-  if (sidebarWasHidden) {
-    importHighlightTimer = setTimeout(startHighlight, 280);
-  } else {
-    requestAnimationFrame(() => requestAnimationFrame(startHighlight));
-  }
+  requestAnimationFrame(() => requestAnimationFrame(startHighlight));
 }
 
-function openSettingsDialog() {
+function openSettingsDialog({ focus = "api" } = {}) {
   elements.apiKey.value = config.apiKey;
   if (!elements.settingsDialog.open) elements.settingsDialog.showModal();
-  document.body.classList.remove("sidebar-open");
-  updateSidebarControls();
-  requestAnimationFrame(() => elements.apiKey.select());
+  requestAnimationFrame(() => {
+    if (focus === "backup") {
+      const focusTarget = !elements.cloudLoginForm.hidden
+        ? elements.cloudEmail
+        : $("#downloadSave");
+      focusTarget?.focus();
+      return;
+    }
+    elements.apiKey.select();
+  });
 }
 
 async function importPlaylist(input, { quiet = false } = {}) {
@@ -2061,7 +2072,7 @@ async function restoreBackup(file) {
     saveData();
     render();
     showToast(`${count} 件のプレイリストを復元しました`);
-    elements.backupDialog.close();
+    elements.settingsDialog.close();
   } catch (error) {
     showToast(error.message || "バックアップを読み込めませんでした", true);
   }
@@ -2221,8 +2232,10 @@ $("#toggleKey").addEventListener("click", (event) => {
 $("#settingsForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   config.apiKey = elements.apiKey.value.trim();
+  browserSettings.apiKey = config.apiKey;
+  saveBrowserSettings();
   elements.settingsDialog.close();
-  showToast("API 設定をこのセッションに適用しました");
+  showToast("API キーをこのブラウザに保存しました");
   if (pendingPlaylistUrl && config.apiKey) {
     const url = pendingPlaylistUrl;
     pendingPlaylistUrl = "";
@@ -2235,29 +2248,24 @@ $("#settingsForm").addEventListener("submit", async (event) => {
     }
   }
 });
-$(".close-button", elements.settingsDialog).addEventListener("click", () =>
+$("#closeSettings").addEventListener("click", () =>
   elements.settingsDialog.close(),
 );
 $("#openBackup").addEventListener("click", () => {
   updateBackupUI();
-  elements.backupDialog.showModal();
-  document.body.classList.remove("sidebar-open");
-  updateSidebarControls();
-  requestAnimationFrame(() => {
-    const focusTarget = !elements.cloudLoginForm.hidden ? elements.cloudEmail : $("#downloadSave");
-    focusTarget.focus();
-  });
+  openSettingsDialog({ focus: "backup" });
 });
-$("#closeBackup").addEventListener("click", () => elements.backupDialog.close());
 elements.cloudLoginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   elements.cloudLogin.disabled = true;
+  browserSettings.username = elements.cloudEmail.value.trim();
+  browserSettings.password = elements.cloudPassword.value;
+  saveBrowserSettings();
   try {
     await cloudSync.signIn(
-      elements.cloudEmail.value.trim(),
-      elements.cloudPassword.value,
+      browserSettings.username,
+      browserSettings.password,
     );
-    elements.cloudPassword.value = "";
     showToast("クラウド同期へログインしました");
   } catch (error) {
     showToast(error.message, true);
@@ -2305,10 +2313,6 @@ elements.projectTree.addEventListener("click", (event) => {
   if (!button) return;
   selectTreeTarget("playlist", button.dataset.projectSeries);
   openSeries(button.dataset.projectSeries);
-  if (window.matchMedia("(max-width: 780px)").matches) {
-    document.body.classList.remove("sidebar-open");
-    updateSidebarControls();
-  }
 });
 
 elements.projectTree.addEventListener("contextmenu", (event) => {
@@ -2652,48 +2656,6 @@ elements.sidebarResizer.addEventListener("keydown", (event) => {
   elements.sidebarResizer.setAttribute("aria-valuenow", String(Math.round(width)));
 });
 
-function updateSidebarControls() {
-  const mobile = window.matchMedia("(max-width: 780px)").matches;
-  const visible = mobile
-    ? document.body.classList.contains("sidebar-open")
-    : !document.body.classList.contains("sidebar-collapsed");
-  elements.sidebar.inert = !visible;
-  elements.sidebar.setAttribute("aria-hidden", String(!visible));
-  elements.mobileMenu.setAttribute("aria-expanded", String(visible));
-  elements.mobileMenu.setAttribute(
-    "aria-label",
-    visible ? "左サイドバーを隠す" : "左サイドバーを表示",
-  );
-  elements.mobileMenu.title = visible ? "左サイドバーを隠す" : "左サイドバーを表示";
-}
-
-function hideSidebar() {
-  if (window.matchMedia("(max-width: 780px)").matches) {
-    document.body.classList.remove("sidebar-open");
-  } else {
-    document.body.classList.add("sidebar-collapsed");
-    config.sidebarCollapsed = true;
-  }
-  updateSidebarControls();
-  elements.mobileMenu.focus();
-}
-
-elements.mobileMenu.addEventListener("click", () => {
-  if (window.matchMedia("(max-width: 780px)").matches) {
-    document.body.classList.toggle("sidebar-open");
-    updateSidebarControls();
-    return;
-  }
-  document.body.classList.toggle("sidebar-collapsed");
-  config.sidebarCollapsed = document.body.classList.contains("sidebar-collapsed");
-  updateSidebarControls();
-});
-elements.sidebarHide.addEventListener("click", hideSidebar);
-$("#sidebarScrim").addEventListener("click", () => {
-  document.body.classList.remove("sidebar-open");
-  updateSidebarControls();
-});
-
 document.addEventListener("pointerdown", (event) => {
   if (!elements.contextMenu.hidden && !event.target.closest("#treeContextMenu")) {
     closeTreeContextMenu();
@@ -2707,14 +2669,6 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.altKey && event.key.toLowerCase() === "f") {
     event.preventDefault();
-    if (document.body.classList.contains("sidebar-collapsed")) {
-      document.body.classList.remove("sidebar-collapsed");
-      config.sidebarCollapsed = false;
-    }
-    if (window.matchMedia("(max-width: 780px)").matches) {
-      document.body.classList.add("sidebar-open");
-    }
-    updateSidebarControls();
     elements.projectSearch.focus();
   }
   if (event.key === "Escape") {
@@ -2722,12 +2676,8 @@ document.addEventListener("keydown", (event) => {
       closeTreeContextMenu();
       return;
     }
-    document.body.classList.remove("sidebar-open");
-    updateSidebarControls();
   }
 });
-
-window.matchMedia("(max-width: 780px)").addEventListener("change", updateSidebarControls);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
@@ -2735,7 +2685,6 @@ if ("serviceWorker" in navigator) {
 
 render();
 cloudSync.start();
-updateSidebarControls();
 
 const initialSeriesId = location.hash.startsWith("#series=")
   ? decodeURIComponent(location.hash.slice("#series=".length))

@@ -851,8 +851,7 @@ body.is-resizing-sidebar {
 }
 
 .icon-button,
-.delete-all-button,
-.mobile-menu {
+.delete-all-button {
   display: grid;
   place-items: center;
   width: 46px;
@@ -901,11 +900,6 @@ body.is-resizing-sidebar {
 
 .icon-button.is-spinning {
   animation: spin 0.8s linear infinite;
-}
-
-.mobile-menu {
-  display: grid;
-  margin-right: 13px;
 }
 
 body.sidebar-collapsed .app-shell {
@@ -2643,10 +2637,6 @@ body.detail-pinned .detail-sidebar {
     gap: 6px;
   }
 
-  .mobile-menu {
-    margin-right: 10px;
-  }
-
   .topbar .eyebrow {
     display: none;
   }
@@ -2837,12 +2827,6 @@ body.detail-pinned .detail-sidebar {
 
   .topbar-actions {
     gap: 4px;
-  }
-
-  .mobile-menu {
-    width: 42px;
-    height: 42px;
-    margin-right: 8px;
   }
 
   .search,
@@ -3563,8 +3547,7 @@ body::after {
 }
 
 .icon-button,
-.delete-all-button,
-.mobile-menu {
+.delete-all-button {
   background: rgba(25, 20, 54, 0.72);
   border-color: rgba(177, 157, 255, 0.24);
 }
@@ -4038,7 +4021,6 @@ dialog::backdrop {
   .backup-card,
   .explorer-actions button,
   .tree-context-trigger,
-  .mobile-menu,
   .icon-button,
   .delete-all-button,
   .primary-button,
@@ -4071,7 +4053,6 @@ dialog::backdrop {
   .backup-card,
   .explorer-actions button,
   .tree-context-trigger,
-  .mobile-menu,
   .icon-button,
   .delete-all-button,
   .primary-button,
@@ -4182,7 +4163,6 @@ dialog::backdrop {
   transform: translateY(-1px) rotate(-3deg);
 }
 
-.mobile-menu,
 .icon-button {
   color: #d9d1ed;
   background: linear-gradient(145deg, rgba(65, 51, 110, 0.75), rgba(27, 29, 66, 0.78));
@@ -4192,7 +4172,6 @@ dialog::backdrop {
     0 8px 22px rgba(4, 2, 22, 0.2);
 }
 
-.mobile-menu:hover,
 .icon-button:hover {
   color: #fff;
   background: linear-gradient(145deg, rgba(120, 84, 204, 0.62), rgba(44, 128, 164, 0.38));
@@ -4203,8 +4182,7 @@ dialog::backdrop {
     0 0 18px rgba(116, 218, 255, 0.09);
 }
 
-.icon-button .icon,
-.mobile-menu .icon {
+.icon-button .icon {
   width: 20px;
   height: 20px;
 }
@@ -6280,4 +6258,95 @@ body.detail-pinned .task-state-button {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+}
+
+/* Settings, cloud sync, and backups share one browser-persistent settings sheet. */
+.settings-data-dialog {
+  width: min(720px, calc(100% - 28px));
+}
+
+.settings-section {
+  padding-block: 4px 26px;
+}
+
+.settings-section + .settings-section {
+  padding-top: 26px;
+  border-top: 1px solid rgba(177, 157, 255, 0.18);
+}
+
+.settings-section:last-child {
+  padding-bottom: 0;
+}
+
+.settings-section h3 {
+  margin: 0 0 7px;
+  font-size: 17px;
+}
+
+.settings-section .sheet-lead {
+  margin-bottom: 17px;
+}
+
+.settings-section-actions {
+  margin-top: 16px;
+}
+
+.browser-storage-note {
+  display: block;
+  margin-top: -7px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.topbar {
+  grid-template-columns: minmax(130px, 0.7fr) minmax(300px, 1.45fr) auto;
+}
+
+@media (max-width: 1080px) {
+  .topbar {
+    grid-template-columns: minmax(110px, 0.5fr) minmax(250px, 1fr) auto;
+  }
+}
+
+@media (max-width: 780px) {
+  .sidebar {
+    position: relative;
+    left: auto;
+    width: 100%;
+    height: min(480px, 52dvh);
+    min-height: 320px;
+    transform: none;
+    transition: none;
+  }
+
+  .main {
+    height: 100dvh;
+  }
+
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .topbar-title {
+    grid-column: 1;
+  }
+
+  .topbar-actions {
+    grid-column: 2;
+  }
+
+  .header-add-form {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 580px) {
+  .settings-section-actions {
+    flex-direction: column-reverse;
+  }
+
+  .settings-section-actions > * {
+    width: 100%;
+  }
 }
