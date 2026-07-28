@@ -122,9 +122,10 @@
         [
           "登録済みデータからおすすめを開ける",
           Boolean(
-            appDocument.querySelector("#openRecommendations") &&
+              appDocument.querySelector("#openRecommendations") &&
               appDocument.querySelector("#recommendationDialog #recommendationResults") &&
               appDocument.querySelector("#refreshRecommendations") &&
+              appDocument.querySelector("#openBlockedRecommendations") &&
               appDocument.querySelectorAll(
                 "#recommendationTabs [data-recommendation-tab][role='tab']",
               ).length === 4 &&
@@ -143,6 +144,27 @@
               appDocument
                 .querySelector("[data-recommendation-tab='new-game-new-channel']")
                 ?.textContent.includes("新しい投稿者"),
+          ),
+        ],
+        [
+          "ブロック済みのおすすめを分類して管理できる",
+          Boolean(
+            appDocument.querySelector(
+              "#blockedRecommendationDialog #blockedRecommendationResults",
+            ) &&
+              appDocument.querySelector("#clearBlockedRecommendations") &&
+              appDocument.querySelectorAll(
+                "#blockedRecommendationTabs [data-blocked-recommendation-tab][role='tab']",
+              ).length === 3 &&
+              appDocument.querySelector(
+                "[data-blocked-recommendation-tab='playlists']",
+              ) &&
+              appDocument.querySelector(
+                "[data-blocked-recommendation-tab='channels']",
+              ) &&
+              appDocument.querySelector(
+                "[data-blocked-recommendation-tab='games']",
+              ),
           ),
         ],
         [

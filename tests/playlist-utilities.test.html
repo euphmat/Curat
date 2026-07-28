@@ -16,6 +16,29 @@
       games: ["project:非表示ゲーム"],
       channels: ["id:hidden-channel"],
     },
+    recommendationDismissalDetails: {
+      playlists: [{
+        key: "id:hidden-playlist",
+        label: "非表示プレイリスト",
+        detail: "テスト投稿者",
+        thumbnail: "",
+        blockedAt: now,
+      }],
+      games: [{
+        key: "project:非表示ゲーム",
+        label: "非表示ゲーム",
+        detail: "",
+        thumbnail: "",
+        blockedAt: now,
+      }],
+      channels: [{
+        key: "id:hidden-channel",
+        label: "非表示投稿者",
+        detail: "",
+        thumbnail: "",
+        blockedAt: now,
+      }],
+    },
     projects: [{ name: "テスト", aliases: [], learnedAliases: [] }],
     series: [{
       id: "utility-series-video-dismissal",
@@ -76,6 +99,13 @@
       !("videos" in completedExport.recommendationDismissals) &&
       completedExport.recommendationDismissals.games[0] === "project:非表示ゲーム" &&
       completedExport.recommendationDismissals.channels[0] === "id:hidden-channel";
+    const dismissalDetailsPreserved =
+      completedExport.recommendationDismissalDetails.playlists[0]?.label ===
+        "非表示プレイリスト" &&
+      completedExport.recommendationDismissalDetails.games[0]?.label ===
+        "非表示ゲーム" &&
+      completedExport.recommendationDismissalDetails.channels[0]?.label ===
+        "非表示投稿者";
 
     appDocument.querySelector('[data-detail-action="reset-progress"]')?.click();
     await waitForCuratTest(() => appDocument.querySelector("#confirmDialog").open);
@@ -89,13 +119,53 @@
     const resetCorrectly =
       reset.filter((task) => !task.archived).every((task) => task.status === "todo") &&
       reset.find((task) => task.id === "archived").status === "doing";
+
+    appDocument.querySelector("#recommendationDialog")?.showModal();
+    appDocument.querySelector("#openBlockedRecommendations")?.click();
+    await waitForCuratTest(
+      () => appDocument.querySelector("#blockedRecommendationDialog")?.open,
+    );
+    const blockedTabsCorrect =
+      appDocument.querySelectorAll(
+        "#blockedRecommendationTabs [data-blocked-recommendation-tab]",
+      ).length === 3 &&
+      appDocument.querySelector("#blockedRecommendationResults")?.textContent.includes(
+        "非表示プレイリスト",
+      );
+    appDocument
+      .querySelector("[data-blocked-recommendation-tab='games']")
+      ?.click();
+    await waitForCuratTest(
+      () =>
+        appDocument.querySelector("#blockedRecommendationResults")?.textContent.includes(
+          "非表示ゲーム",
+        ),
+    );
+    appDocument
+      .querySelector(
+        "#blockedRecommendationResults [data-blocked-action='unblock']",
+      )
+      ?.click();
+    await waitForCuratTest(
+      () =>
+        !appDocument.querySelector(
+          "#blockedRecommendationResults [data-blocked-action='unblock']",
+        ),
+    );
+    const afterUnblock = await exportCuratTestData(frame);
+    const unblockSaved =
+      afterUnblock.recommendationDismissals.games.length === 0 &&
+      afterUnblock.recommendationDismissalDetails.games.length === 0;
     finish(
       iconOnly &&
         toolbarContained &&
         completedCorrectly &&
         resetCorrectly &&
-        dismissalsPreserved,
-      `icons=${iconOnly} actions=${actions.length} contained=${toolbarContained} complete=${completedCorrectly} reset=${resetCorrectly} dismissals=${JSON.stringify(completedExport.recommendationDismissals)}`,
+        dismissalsPreserved &&
+        dismissalDetailsPreserved &&
+        blockedTabsCorrect &&
+        unblockSaved,
+      `icons=${iconOnly} actions=${actions.length} contained=${toolbarContained} complete=${completedCorrectly} reset=${resetCorrectly} dismissals=${JSON.stringify(completedExport.recommendationDismissals)} details=${JSON.stringify(completedExport.recommendationDismissalDetails)} blockedTabs=${blockedTabsCorrect} unblock=${unblockSaved}`,
     );
   });
   frame.src = "../index.html";

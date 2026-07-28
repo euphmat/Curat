@@ -44,6 +44,7 @@
         <symbol id="icon-user-plus" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2.5 21a6.5 6.5 0 0 1 13 0M19 10v7M15.5 13.5h7"/></symbol>
         <symbol id="icon-user-check" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2.5 21a6.5 6.5 0 0 1 13 0M16 14l2 2 4-5"/></symbol>
         <symbol id="icon-playlist-x" viewBox="0 0 24 24"><path d="M3 6h11M3 11h11M3 16h7"/><path d="m15 14 6 6M21 14l-6 6"/></symbol>
+        <symbol id="icon-unlock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-2"/></symbol>
         <symbol id="icon-save" viewBox="0 0 24 24"><path d="M5 3h12l3 3v15H4V4a1 1 0 0 1 1-1Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol>
         <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></symbol>
         <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></symbol>
@@ -289,16 +290,99 @@
         </div>
         <div class="recommendation-toolbar">
           <p id="recommendationStatus" role="status" aria-live="polite"></p>
-          <button class="secondary-button" id="refreshRecommendations" type="button">
-            <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>
-            <span>候補を更新</span>
-          </button>
+          <div class="recommendation-toolbar-actions">
+            <button class="secondary-button" id="openBlockedRecommendations" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#icon-eye-off"></use></svg>
+              <span>ブロック済みを管理</span>
+            </button>
+            <button class="secondary-button" id="refreshRecommendations" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>
+              <span>候補を更新</span>
+            </button>
+          </div>
         </div>
         <div
           class="recommendation-results"
           id="recommendationResults"
           role="tabpanel"
           aria-labelledby="recommendationTabNewChannel"
+          tabindex="0"
+        ></div>
+      </div>
+    </dialog>
+
+    <dialog class="sheet-dialog blocked-recommendation-dialog" id="blockedRecommendationDialog">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div>
+            <span class="recommendation-eyebrow">BLOCKED ITEMS</span>
+            <h2>ブロック済みを管理</h2>
+          </div>
+          <button class="close-button" id="closeBlockedRecommendations" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
+        </div>
+        <p class="sheet-lead blocked-recommendation-lead">
+          おすすめに表示しないプレイリスト、投稿者、ゲームを確認し、必要なものだけブロック解除できます。
+        </p>
+        <div
+          class="blocked-recommendation-tabs"
+          id="blockedRecommendationTabs"
+          role="tablist"
+          aria-label="ブロック済み項目の分類"
+        >
+          <button
+            class="blocked-recommendation-tab is-active"
+            id="blockedRecommendationTab-playlists"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="blockedRecommendationResults"
+            data-blocked-recommendation-tab="playlists"
+          >
+            <svg class="icon" aria-hidden="true"><use href="#icon-list-video"></use></svg>
+            <span>プレイリスト</span>
+            <b class="blocked-recommendation-tab-count" aria-hidden="true">0</b>
+          </button>
+          <button
+            class="blocked-recommendation-tab"
+            id="blockedRecommendationTab-channels"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="blockedRecommendationResults"
+            tabindex="-1"
+            data-blocked-recommendation-tab="channels"
+          >
+            <svg class="icon" aria-hidden="true"><use href="#icon-user-x"></use></svg>
+            <span>投稿者</span>
+            <b class="blocked-recommendation-tab-count" aria-hidden="true">0</b>
+          </button>
+          <button
+            class="blocked-recommendation-tab"
+            id="blockedRecommendationTab-games"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="blockedRecommendationResults"
+            tabindex="-1"
+            data-blocked-recommendation-tab="games"
+          >
+            <svg class="icon" aria-hidden="true"><use href="#icon-gamepad"></use></svg>
+            <span>ゲーム</span>
+            <b class="blocked-recommendation-tab-count" aria-hidden="true">0</b>
+          </button>
+        </div>
+        <div class="blocked-recommendation-toolbar">
+          <p id="blockedRecommendationStatus" role="status" aria-live="polite"></p>
+          <button class="blocked-recommendation-clear" id="clearBlockedRecommendations" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#icon-unlock"></use></svg>
+            <span>すべて解除</span>
+          </button>
+        </div>
+        <div
+          class="blocked-recommendation-results"
+          id="blockedRecommendationResults"
+          role="tabpanel"
+          aria-labelledby="blockedRecommendationTab-playlists"
           tabindex="0"
         ></div>
       </div>

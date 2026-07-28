@@ -176,6 +176,11 @@ const defaultData = () => ({
     games: [],
     channels: [],
   },
+  recommendationDismissalDetails: {
+    playlists: [],
+    games: [],
+    channels: [],
+  },
 });
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -195,6 +200,12 @@ const elements = {
   recommendationStatus: $("#recommendationStatus"),
   recommendationResults: $("#recommendationResults"),
   refreshRecommendations: $("#refreshRecommendations"),
+  openBlockedRecommendations: $("#openBlockedRecommendations"),
+  blockedRecommendationDialog: $("#blockedRecommendationDialog"),
+  blockedRecommendationTabs: $("#blockedRecommendationTabs"),
+  blockedRecommendationStatus: $("#blockedRecommendationStatus"),
+  blockedRecommendationResults: $("#blockedRecommendationResults"),
+  clearBlockedRecommendations: $("#clearBlockedRecommendations"),
   detailView: $("#detailView"),
   detailContent: $("#detailContent"),
   settingsDialog: $("#settingsDialog"),
@@ -314,6 +325,7 @@ let recommendationError = "";
 let recommendationLastUpdatedAt = "";
 let recommendationSourceSignature = "";
 let activeRecommendationTab = "new-channel";
+let activeBlockedRecommendationType = "playlists";
 let cloudState = {
   configured: false,
   phase: "not-configured",
@@ -347,6 +359,9 @@ const cloudSync = new CloudSync({
       saveData({ syncCloud: false, touchUpdatedAt: false });
       render();
       if (elements.recommendationDialog.open) renderRecommendationResults();
+      if (elements.blockedRecommendationDialog.open) {
+        renderBlockedRecommendations();
+      }
       if (openSeriesId && data.series.some((series) => series.id === openSeriesId)) {
         openSeries(openSeriesId);
       } else if (data.series[0]) {
@@ -406,14 +421,19 @@ function migrateData(saved) {
       derivedProjects.push({ name: series.project, aliases: [], learnedAliases: [], icon: "" });
     }
   }
+  const recommendationDismissals = normalizeRecommendationDismissals(
+    saved.recommendationDismissals,
+  );
   return {
     ...defaultData(),
     ...saved,
     version: APP_VERSION,
     series: migratedSeries,
     playlistOrder: normalizePlaylistOrder(migratedSeries, saved.playlistOrder),
-    recommendationDismissals: normalizeRecommendationDismissals(
-      saved.recommendationDismissals,
+    recommendationDismissals,
+    recommendationDismissalDetails: normalizeRecommendationDismissalDetails(
+      saved.recommendationDismissalDetails,
+      recommendationDismissals,
     ),
     projects: [
       ...savedProjects.map((project) => ({
@@ -443,6 +463,32 @@ function normalizeRecommendationDismissals(value = {}) {
     ]),
     games: uniqueKeys(value.games),
     channels: uniqueKeys(value.channels),
+  };
+}
+
+function normalizeRecommendationDismissalDetails(value = {}, dismissals = {}) {
+  const normalizedDismissals = normalizeRecommendationDismissals(dismissals);
+  const normalizeItems = (kind) => {
+    const allowedKeys = new Set(normalizedDismissals[kind]);
+    const byKey = new Map();
+    for (const rawItem of Array.isArray(value?.[kind]) ? value[kind] : []) {
+      if (!rawItem || typeof rawItem !== "object") continue;
+      const key = String(rawItem.key || "").trim();
+      if (!key || !allowedKeys.has(key)) continue;
+      byKey.set(key, {
+        key,
+        label: String(rawItem.label || "").trim().slice(0, 300),
+        detail: String(rawItem.detail || "").trim().slice(0, 300),
+        thumbnail: String(rawItem.thumbnail || "").trim().slice(0, 2000),
+        blockedAt: String(rawItem.blockedAt || "").trim(),
+      });
+    }
+    return [...byKey.values()].slice(-500);
+  };
+  return {
+    playlists: normalizeItems("playlists"),
+    games: normalizeItems("games"),
+    channels: normalizeItems("channels"),
   };
 }
 
@@ -1052,6 +1098,188 @@ const RECOMMENDATION_TABS = {
     emptyCopy: "ゲームと投稿者の両方がライブラリにない候補が見つかると、ここに表示します。",
   },
 };
+
+const BLOCKED_RECOMMENDATION_TYPES = {
+  playlists: {
+    label: "プレイリスト",
+    icon: "list-video",
+    emptyTitle: "ブロック済みのプレイリストはありません",
+  },
+  channels: {
+    label: "投稿者",
+    icon: "user-x",
+    emptyTitle: "ブロック済みの投稿者はいません",
+  },
+  games: {
+    label: "ゲーム",
+    icon: "gamepad",
+    emptyTitle: "ブロック済みのゲームはありません",
+  },
+};
+
+function recommendationDismissalDetail(kind, key, candidate) {
+  const values = {
+    playlists: {
+      label: candidate.title,
+      detail: candidate.channelTitle || "",
+      thumbnail: candidate.thumbnail || "",
+    },
+    games: {
+      label: candidate.matchedProjectName || candidate.title,
+      detail: candidate.channelTitle
+        ? `候補の投稿者: ${candidate.channelTitle}`
+        : "",
+      thumbnail: "",
+    },
+    channels: {
+      label: candidate.channelTitle || "投稿者名未取得",
+      detail: "この投稿者のおすすめ候補",
+      thumbnail: "",
+    },
+  }[kind];
+  return {
+    key,
+    ...values,
+    blockedAt: new Date().toISOString(),
+  };
+}
+
+function rememberRecommendationDismissalDetail(kind, key, candidate) {
+  const existingDetails = data.recommendationDismissalDetails || {};
+  data.recommendationDismissalDetails = normalizeRecommendationDismissalDetails(
+    {
+      ...existingDetails,
+      [kind]: [
+        ...(Array.isArray(existingDetails[kind]) ? existingDetails[kind] : []),
+        recommendationDismissalDetail(kind, key, candidate),
+      ],
+    },
+    data.recommendationDismissals,
+  );
+}
+
+function blockedRecommendationFallbackLabel(kind, key) {
+  const rawKey = String(key || "");
+  const value = rawKey.includes(":")
+    ? rawKey.slice(rawKey.indexOf(":") + 1)
+    : rawKey;
+  return {
+    playlists: `プレイリスト ${value}`,
+    channels: `投稿者 ${value}`,
+    games: value || "ゲーム名未取得",
+  }[kind];
+}
+
+function blockedRecommendationItemHtml(kind, key) {
+  const type = BLOCKED_RECOMMENDATION_TYPES[kind];
+  const detail = (data.recommendationDismissalDetails?.[kind] || []).find(
+    (item) => item.key === key,
+  );
+  const label = detail?.label || blockedRecommendationFallbackLabel(kind, key);
+  const blockedAt = detail?.blockedAt &&
+    !Number.isNaN(new Date(detail.blockedAt).getTime())
+    ? `${formatDate(detail.blockedAt)} にブロック`
+    : "";
+  const secondary = [detail?.detail, blockedAt, detail?.label ? "" : key]
+    .filter(Boolean)
+    .join(" · ");
+  const visual = kind === "playlists" && detail?.thumbnail
+    ? `<img src="${escapeHtml(detail.thumbnail)}" alt="" loading="lazy" />`
+    : icon(type.icon);
+  return `
+    <article class="blocked-recommendation-item" data-blocked-key="${escapeHtml(key)}">
+      <span class="blocked-recommendation-visual" aria-hidden="true">${visual}</span>
+      <span class="blocked-recommendation-copy">
+        <strong>${escapeHtml(label)}</strong>
+        ${secondary ? `<small>${escapeHtml(secondary)}</small>` : ""}
+      </span>
+      <button
+        class="blocked-recommendation-unblock"
+        type="button"
+        data-blocked-action="unblock"
+        data-blocked-kind="${escapeHtml(kind)}"
+        data-blocked-key="${escapeHtml(key)}"
+        aria-label="「${escapeHtml(label)}」のブロックを解除"
+      >${icon("unlock")}<span>解除</span></button>
+    </article>
+  `;
+}
+
+function updateBlockedRecommendationTabs() {
+  for (const button of $$(
+    "[data-blocked-recommendation-tab]",
+    elements.blockedRecommendationTabs,
+  )) {
+    const kind = button.dataset.blockedRecommendationTab;
+    const isActive = kind === activeBlockedRecommendationType;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+    button.tabIndex = isActive ? 0 : -1;
+    const count = $(".blocked-recommendation-tab-count", button);
+    if (count) {
+      count.textContent = data.recommendationDismissals?.[kind]?.length || 0;
+    }
+  }
+}
+
+function renderBlockedRecommendations() {
+  const kind = activeBlockedRecommendationType;
+  const type = BLOCKED_RECOMMENDATION_TYPES[kind];
+  const keys = data.recommendationDismissals?.[kind] || [];
+  updateBlockedRecommendationTabs();
+  elements.blockedRecommendationResults.setAttribute(
+    "aria-labelledby",
+    `blockedRecommendationTab-${kind}`,
+  );
+  elements.blockedRecommendationStatus.textContent = keys.length
+    ? `${type.label} ${keys.length} 件をブロック中`
+    : `${type.label}のブロックはありません`;
+  elements.clearBlockedRecommendations.disabled = keys.length === 0;
+  elements.clearBlockedRecommendations.dataset.blockedKind = kind;
+  elements.clearBlockedRecommendations.querySelector("span").textContent =
+    `${type.label}をすべて解除`;
+  elements.blockedRecommendationResults.innerHTML = keys.length
+    ? `<div class="blocked-recommendation-list">${keys
+        .map((key) => blockedRecommendationItemHtml(kind, key))
+        .join("")}</div>`
+    : `
+      <div class="blocked-recommendation-empty">
+        ${icon("eye")}
+        <strong>${escapeHtml(type.emptyTitle)}</strong>
+        <span>おすすめカードから「表示しない」を選ぶと、ここで管理できます。</span>
+      </div>
+    `;
+}
+
+function openBlockedRecommendationDialog() {
+  renderBlockedRecommendations();
+  if (!elements.blockedRecommendationDialog.open) {
+    elements.blockedRecommendationDialog.showModal();
+  }
+}
+
+function unblockRecommendation(kind, key) {
+  if (!BLOCKED_RECOMMENDATION_TYPES[kind]) return false;
+  const keys = data.recommendationDismissals?.[kind] || [];
+  if (!keys.includes(key)) return false;
+  data.recommendationDismissals = normalizeRecommendationDismissals({
+    ...data.recommendationDismissals,
+    [kind]: keys.filter((item) => item !== key),
+  });
+  data.recommendationDismissalDetails = normalizeRecommendationDismissalDetails(
+    {
+      ...data.recommendationDismissalDetails,
+      [kind]: (data.recommendationDismissalDetails?.[kind] || []).filter(
+        (item) => item.key !== key,
+      ),
+    },
+    data.recommendationDismissals,
+  );
+  recommendationSourceSignature = "";
+  saveData();
+  renderBlockedRecommendations();
+  return true;
+}
 
 function recommendationCandidatesByType(type) {
   return recommendationCandidates.filter(
@@ -3388,6 +3616,10 @@ elements.syncAll.addEventListener("click", syncAllSeries);
 elements.deleteAll.addEventListener("click", deleteAllPlaylistsAndFolders);
 elements.openRecommendations.addEventListener("click", openRecommendationDialog);
 elements.refreshRecommendations.addEventListener("click", loadRecommendations);
+elements.openBlockedRecommendations.addEventListener(
+  "click",
+  openBlockedRecommendationDialog,
+);
 elements.recommendationTabs.addEventListener("click", (event) => {
   const tab = event.target.closest("[data-recommendation-tab]");
   if (!tab) return;
@@ -3416,6 +3648,80 @@ elements.recommendationDialog.addEventListener("click", (event) => {
   if (event.target === elements.recommendationDialog) {
     elements.recommendationDialog.close();
   }
+});
+elements.blockedRecommendationTabs.addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-blocked-recommendation-tab]");
+  if (!tab) return;
+  activeBlockedRecommendationType = tab.dataset.blockedRecommendationTab;
+  renderBlockedRecommendations();
+});
+elements.blockedRecommendationTabs.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = $$(
+    "[data-blocked-recommendation-tab]",
+    elements.blockedRecommendationTabs,
+  );
+  const currentIndex = tabs.indexOf(
+    event.target.closest("[data-blocked-recommendation-tab]"),
+  );
+  if (currentIndex < 0) return;
+  let nextIndex = currentIndex;
+  if (event.key === "Home") nextIndex = 0;
+  if (event.key === "End") nextIndex = tabs.length - 1;
+  if (event.key === "ArrowLeft") {
+    nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  }
+  if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+  event.preventDefault();
+  activeBlockedRecommendationType =
+    tabs[nextIndex].dataset.blockedRecommendationTab;
+  renderBlockedRecommendations();
+  tabs[nextIndex].focus();
+});
+$("#closeBlockedRecommendations").addEventListener("click", () =>
+  elements.blockedRecommendationDialog.close(),
+);
+elements.blockedRecommendationDialog.addEventListener("click", (event) => {
+  if (event.target === elements.blockedRecommendationDialog) {
+    elements.blockedRecommendationDialog.close();
+  }
+});
+elements.blockedRecommendationResults.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-blocked-action='unblock']");
+  if (!button) return;
+  const kind = button.dataset.blockedKind;
+  const key = button.dataset.blockedKey;
+  if (!unblockRecommendation(kind, key)) return;
+  showToast("ブロックを解除しました。候補を更新すると再び表示されます");
+});
+elements.clearBlockedRecommendations.addEventListener("click", async (event) => {
+  const kind = event.currentTarget.dataset.blockedKind;
+  const type = BLOCKED_RECOMMENDATION_TYPES[kind];
+  const count = data.recommendationDismissals?.[kind]?.length || 0;
+  if (!type || !count) return;
+  const confirmed = await requestConfirmation({
+    title: `${type.label}のブロックをすべて解除`,
+    message: `${type.label} ${count} 件を解除し、次回の候補更新から再び表示できるようにします。`,
+    actionLabel: "すべて解除",
+    actionIcon: "unlock",
+    actionTone: "primary",
+  });
+  if (!confirmed) return;
+  data.recommendationDismissals = normalizeRecommendationDismissals({
+    ...data.recommendationDismissals,
+    [kind]: [],
+  });
+  data.recommendationDismissalDetails = normalizeRecommendationDismissalDetails(
+    {
+      ...data.recommendationDismissalDetails,
+      [kind]: [],
+    },
+    data.recommendationDismissals,
+  );
+  recommendationSourceSignature = "";
+  saveData();
+  renderBlockedRecommendations();
+  showToast(`${type.label}のブロックをすべて解除しました`);
 });
 elements.recommendationResults.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-recommendation-action]");
@@ -3446,6 +3752,7 @@ elements.recommendationResults.addEventListener("click", async (event) => {
       ...data.recommendationDismissals,
       [kind]: [...(data.recommendationDismissals?.[kind] || []), key],
     });
+    rememberRecommendationDismissalDetail(kind, key, candidate);
     recommendationCandidates = recommendationCandidates.filter(
       (item) =>
         !isRecommendationDismissed(item, data.recommendationDismissals),
