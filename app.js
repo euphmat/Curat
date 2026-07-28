@@ -273,6 +273,7 @@ let selectedTreeKey = "";
 let contextTarget = null;
 let confirmResolver = null;
 let importHighlightTimer = null;
+let newVideoHighlightTimer = null;
 let recentImportCorrection = null;
 let recommendationCandidates = [];
 let recommendationLoading = false;
@@ -1185,13 +1186,14 @@ function mergePlaylistResult(playlistId, result) {
   const now = new Date().toISOString();
   const existing = data.series.find((series) => series.id === playlistId);
   const existingTasks = new Map((existing?.tasks || []).map((task) => [task.id, task]));
+  const newTasks = [];
 
   const freshTasks = result.items.map((item, index) => {
     const previous = existingTasks.get(item.id);
     const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || "";
     const video = result.videoDetails.get(videoId);
     existingTasks.delete(item.id);
-    return {
+    const task = {
       id: item.id,
       videoId,
       title: item.snippet?.title || "タイトルを取得できない動画",
@@ -1207,6 +1209,8 @@ function mergePlaylistResult(playlistId, result) {
       createdAt: previous?.createdAt || now,
       updatedAt: previous?.updatedAt || now,
     };
+    if (existing && !previous) newTasks.push(task);
+    return task;
   });
 
   for (const oldTask of existingTasks.values()) {
@@ -1260,7 +1264,7 @@ function mergePlaylistResult(playlistId, result) {
     learnPlaylistTitle(nextSeries.project, nextSeries.title);
   }
   saveData();
-  return { series: nextSeries, placement, isNew: !existing };
+  return { series: nextSeries, placement, isNew: !existing, newTasks };
 }
 
 function revealImportedPlaylist(series) {
@@ -1303,6 +1307,62 @@ function revealImportedPlaylist(series) {
   };
 
   requestAnimationFrame(() => requestAnimationFrame(startHighlight));
+}
+
+function clearNewVideoHighlights() {
+  clearTimeout(newVideoHighlightTimer);
+  newVideoHighlightTimer = null;
+  $$(".project-group.has-new-videos, .project-playlist-row.has-new-videos", elements.projectTree)
+    .forEach((item) => item.classList.remove("has-new-videos"));
+  $$(".new-video-badge", elements.projectTree).forEach((item) => item.remove());
+}
+
+function highlightPlaylistUpdates(updates) {
+  clearNewVideoHighlights();
+  const activeUpdates = updates.filter((update) => update.newTasks.length > 0);
+  if (!activeUpdates.length) return;
+
+  const folderCounts = new Map();
+  for (const { series, newTasks } of activeUpdates) {
+    folderCounts.set(series.project, (folderCounts.get(series.project) || 0) + newTasks.length);
+  }
+
+  const addBadge = (row, count) => {
+    if (!row) return;
+    const badge = document.createElement("span");
+    badge.className = "new-video-badge";
+    badge.textContent = `新着 ${count}本`;
+    badge.setAttribute("aria-hidden", "true");
+    row.append(badge);
+  };
+
+  let firstTarget = null;
+  for (const [project, count] of folderCounts) {
+    const folder = [...elements.projectTree.querySelectorAll("[data-drop-project]")].find(
+      (item) => item.dataset.dropProject === project,
+    );
+    if (!folder) continue;
+    folder.classList.add("has-new-videos");
+    addBadge($("[data-tree-folder]", folder), count);
+    firstTarget ||= folder;
+  }
+
+  for (const { series, newTasks } of activeUpdates) {
+    const playlist = [...elements.projectTree.querySelectorAll("[data-project-series]")].find(
+      (item) => item.dataset.projectSeries === series.id,
+    );
+    const playlistRow = playlist?.closest(".project-playlist-row");
+    if (!playlistRow) continue;
+    playlistRow.classList.add("has-new-videos");
+    addBadge(playlistRow, newTasks.length);
+    firstTarget ||= playlistRow;
+  }
+
+  firstTarget?.scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    block: "nearest",
+  });
+  newVideoHighlightTimer = setTimeout(clearNewVideoHighlights, 4800);
 }
 
 function openSettingsDialog({ focus = "api" } = {}) {
@@ -2895,9 +2955,17 @@ async function syncSeries(seriesId, { quiet = false } = {}) {
     throw new Error("YouTube API キーを設定してください。");
   }
   const result = await fetchPlaylist(seriesId);
-  const { series: updated } = mergePlaylistResult(seriesId, result);
+  const { series: updated, newTasks } = mergePlaylistResult(seriesId, result);
   render();
-  if (!quiet) showToast(`「${updated.title}」を再同期しました`);
+  if (!quiet) {
+    if (newTasks.length) {
+      highlightPlaylistUpdates([{ series: updated, newTasks }]);
+      showToast(`「${updated.title}」に新着動画が ${newTasks.length} 本あります`);
+    } else {
+      showToast(`「${updated.title}」を再同期しました`);
+    }
+  }
+  return { series: updated, newTasks };
 }
 
 async function syncAllSeries() {
@@ -2912,16 +2980,28 @@ async function syncAllSeries() {
   elements.syncAll.classList.add("is-spinning");
   elements.syncAll.disabled = true;
   let success = 0;
+  const updates = [];
   try {
     for (const series of [...data.series]) {
       try {
-        await syncSeries(series.id, { quiet: true });
+        const update = await syncSeries(series.id, { quiet: true });
+        if (update?.newTasks.length) updates.push(update);
         success += 1;
       } catch (error) {
         console.error(error);
       }
     }
-    showToast(`${success}/${data.series.length} 件のプレイリストを同期しました`, success === 0);
+    if (updates.length) {
+      const newVideoCount = updates.reduce((total, update) => total + update.newTasks.length, 0);
+      highlightPlaylistUpdates(updates);
+      showToast(
+        updates.length === 1
+          ? `「${updates[0].series.title}」に新着動画が ${newVideoCount} 本あります`
+          : `${updates.length} 件のプレイリストに新着動画が ${newVideoCount} 本あります`,
+      );
+    } else {
+      showToast(`${success}/${data.series.length} 件のプレイリストを同期しました`, success === 0);
+    }
   } finally {
     elements.syncAll.classList.remove("is-spinning");
     elements.syncAll.disabled = false;

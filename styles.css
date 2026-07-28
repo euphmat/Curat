@@ -5407,6 +5407,144 @@ body.detail-pinned .task-state-button {
   }
 }
 
+/* 再同期で見つかった新着動画を、対象フォルダーとプレイリストで案内する */
+.project-group.has-new-videos > .project-row {
+  z-index: 1;
+  color: #fff;
+  animation: synced-folder-new-videos 4.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.project-group.has-new-videos > .project-row .folder-icon {
+  animation: synced-new-video-icon 1.05s 0.12s cubic-bezier(0.22, 1.65, 0.36, 1) both;
+}
+
+.project-playlist-row.has-new-videos {
+  z-index: 1;
+  animation: synced-playlist-new-videos 4.6s 0.08s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.project-playlist-row.has-new-videos .playlist-file-icon {
+  color: #ff5a83;
+  filter: drop-shadow(0 0 8px rgba(255, 90, 131, 0.85));
+  animation: synced-new-video-icon 1.05s 0.18s cubic-bezier(0.22, 1.65, 0.36, 1) both;
+}
+
+.new-video-badge {
+  position: absolute;
+  z-index: 4;
+  top: -5px;
+  right: 7px;
+  padding: 3px 7px;
+  color: #201332;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  background: linear-gradient(110deg, #fff0a8, #96f1ff);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  box-shadow:
+    0 4px 16px rgba(79, 221, 245, 0.34),
+    0 0 0 3px rgba(255, 229, 125, 0.08);
+  pointer-events: none;
+  animation: synced-new-video-badge 4.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.project-group.has-new-videos > .project-row > .new-video-badge {
+  right: 34px;
+}
+
+.project-playlist-row.has-new-videos > .new-video-badge {
+  right: 60px;
+}
+
+@keyframes synced-folder-new-videos {
+  0% {
+    background: rgba(255, 225, 112, 0.38);
+    border-color: rgba(255, 241, 177, 0.9);
+    box-shadow: 0 0 0 rgba(105, 226, 255, 0);
+    transform: translateX(-5px);
+  }
+  16%,
+  58% {
+    background: linear-gradient(100deg, rgba(150, 105, 229, 0.46), rgba(88, 223, 243, 0.19));
+    border-color: rgba(163, 239, 255, 0.72);
+    box-shadow:
+      inset 3px 0 #fff0a8,
+      0 0 24px rgba(105, 226, 255, 0.2);
+    transform: translateX(0);
+  }
+  100% {
+    background: rgba(139, 108, 214, 0.18);
+    border-color: rgba(191, 171, 248, 0.16);
+    box-shadow: inset 2px 0 var(--sky);
+    transform: translateX(0);
+  }
+}
+
+@keyframes synced-playlist-new-videos {
+  0% {
+    opacity: 0.55;
+    background: rgba(255, 225, 112, 0.35);
+    box-shadow: inset 4px 0 #fff0a8;
+    transform: translateX(-12px);
+  }
+  18%,
+  64% {
+    opacity: 1;
+    background: linear-gradient(100deg, rgba(151, 103, 228, 0.36), rgba(80, 216, 240, 0.16));
+    box-shadow:
+      inset 3px 0 #96f1ff,
+      0 0 18px rgba(105, 226, 255, 0.14);
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 1;
+    background: rgba(139, 108, 214, 0.18);
+    box-shadow: inset 2px 0 var(--sky);
+    transform: translateX(0);
+  }
+}
+
+@keyframes synced-new-video-icon {
+  0% {
+    transform: scale(0.65) rotate(-8deg);
+  }
+  55% {
+    transform: scale(1.22) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes synced-new-video-badge {
+  0% {
+    opacity: 0;
+    transform: translateY(5px) scale(0.7);
+  }
+  10%,
+  76% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-group.has-new-videos > .project-row,
+  .project-group.has-new-videos > .project-row .folder-icon,
+  .project-playlist-row.has-new-videos,
+  .project-playlist-row.has-new-videos .playlist-file-icon,
+  .new-video-badge {
+    animation: none;
+  }
+}
+
 /* Main workspace — playlist management now lives in the center column */
 .main {
   display: grid;
