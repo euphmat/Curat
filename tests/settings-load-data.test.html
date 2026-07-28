@@ -8,17 +8,21 @@
   frame.addEventListener("load", () => {
     setTimeout(async () => {
       try {
-        const appWindow = frame.contentWindow;
         const appDocument = frame.contentDocument;
 
         const loadBtn = appDocument.querySelector("#settingsForm #loadDataJson");
         const exists = Boolean(loadBtn);
         const isButtonType = loadBtn?.type === "button";
 
-        // Trigger loadDataJson
-        await appWindow.loadDataJson();
+        loadBtn.click();
+        let saved = null;
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          saved = JSON.parse(frame.contentWindow.localStorage.getItem("playlog:data:v1") || "null");
+          if (Array.isArray(saved?.series) && saved.series.length > 0) break;
+        }
 
-        const dataLoaded = Array.isArray(appWindow.data?.series) && appWindow.data.series.length > 0;
+        const dataLoaded = Array.isArray(saved?.series) && saved.series.length > 0;
 
         const passed = exists && isButtonType && dataLoaded;
         document.querySelector("#result").textContent = passed

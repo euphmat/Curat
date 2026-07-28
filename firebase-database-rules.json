@@ -1,0 +1,11 @@
+{
+  "rules": {
+    "curat": {
+      "ここを自分のFirebase_UIDへ置換": {
+        ".read": "auth != null && auth.uid == 'ここを自分のFirebase_UIDへ置換'",
+        ".write": "auth != null && auth.uid == 'ここを自分のFirebase_UIDへ置換'",
+        ".validate": "newData.hasChildren(['app', 'version', 'originId', 'cloudUpdatedAt', 'data']) && newData.child('app').val() == 'CURAT' && newData.child('data').child('version').isNumber()"
+      }
+    }
+  }
+}

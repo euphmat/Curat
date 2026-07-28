@@ -85,6 +85,15 @@
             appDocument.querySelector("#settingsForm .close-button")?.type === "button",
         ],
         [
+          "端末間同期のログイン UI と未設定案内がある",
+          Boolean(
+            appDocument.querySelector("#cloudLoginForm #cloudEmail") &&
+              appDocument.querySelector("#cloudLoginForm #cloudPassword") &&
+              appDocument.querySelector("#cloudLogin")?.type === "submit" &&
+              !appDocument.querySelector("#cloudSetupNotice")?.hidden,
+          ),
+        ],
+        [
           "分類ルールを Enter キーで保存できる",
           appDocument.querySelectorAll("#projectForm button[type='submit']").length === 1 &&
             appDocument.querySelector("#saveProject")?.hasAttribute("data-default-action") &&

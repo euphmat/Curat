@@ -1,3 +1,5 @@
+import { CloudSync } from "./cloud-sync.js";
+
 const APP_VERSION = 1;
 const DATA_KEY = "playlog:data:v1";
 const CONFIG_KEY = "playlog:config:v1";
@@ -84,6 +86,13 @@ const elements = {
   backupStatus: $("#backupStatus"),
   saveStatusTitle: $("#saveStatusTitle"),
   saveStatusCopy: $("#saveStatusCopy"),
+  cloudLoginForm: $("#cloudLoginForm"),
+  cloudEmail: $("#cloudEmail"),
+  cloudPassword: $("#cloudPassword"),
+  cloudLogin: $("#cloudLogin"),
+  cloudLogout: $("#cloudLogout"),
+  cloudAccount: $("#cloudAccount"),
+  cloudSetupNotice: $("#cloudSetupNotice"),
   projectTree: $("#projectTree"),
   projectDialog: $("#projectDialog"),
   projectName: $("#projectNameInput"),
@@ -135,6 +144,45 @@ let contextTarget = null;
 let confirmResolver = null;
 let importHighlightTimer = null;
 let recentImportCorrection = null;
+let cloudState = {
+  configured: false,
+  phase: "not-configured",
+  email: "",
+  lastSyncedAt: "",
+  error: "",
+};
+let applyingCloudData = false;
+const cloudSync = new CloudSync({
+  getLocalData: () => data,
+  onRemoteData: (remoteData) => {
+    applyingCloudData = true;
+    try {
+      const openSeriesId = detailSeriesId;
+      data = migrateData({
+        ...remoteData,
+        series: Array.isArray(remoteData.series) ? remoteData.series : [],
+        projects: Array.isArray(remoteData.projects) ? remoteData.projects : [],
+        playlistOrder: Array.isArray(remoteData.playlistOrder)
+          ? remoteData.playlistOrder
+          : [],
+      });
+      saveData({ syncCloud: false, syncFile: false, touchUpdatedAt: false });
+      render();
+      if (openSeriesId && data.series.some((series) => series.id === openSeriesId)) {
+        openSeries(openSeriesId);
+      } else if (data.series[0]) {
+        openSeries(data.series[0].id);
+      }
+      showToast("別の端末から最新データを同期しました");
+    } finally {
+      applyingCloudData = false;
+    }
+  },
+  onStatus: (nextState) => {
+    cloudState = nextState;
+    updateBackupUI();
+  },
+});
 
 if (config.sidebarCollapsed && window.matchMedia("(min-width: 781px)").matches) {
   document.body.classList.add("sidebar-collapsed");
@@ -224,7 +272,7 @@ function saveConfig() {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
-function saveData({ syncFile = true } = {}) {
+function saveData({ syncFile = true, syncCloud = true, touchUpdatedAt = true } = {}) {
   data.playlistOrder = normalizePlaylistOrder(data.series, data.playlistOrder);
   for (const series of data.series) {
     if (Array.isArray(series.taskOrder)) {
@@ -234,7 +282,7 @@ function saveData({ syncFile = true } = {}) {
       sortPlaylistTasks(series.tasks);
     }
   }
-  data.updatedAt = new Date().toISOString();
+  if (touchUpdatedAt) data.updatedAt = new Date().toISOString();
   try {
     localStorage.setItem(DATA_KEY, JSON.stringify(data));
   } catch (error) {
@@ -245,6 +293,7 @@ function saveData({ syncFile = true } = {}) {
     clearTimeout(fileSaveTimer);
     fileSaveTimer = setTimeout(() => writeConnectedFile(), 350);
   }
+  if (syncCloud && !applyingCloudData) cloudSync.queue(data);
   updateBackupUI();
 }
 
@@ -2251,7 +2300,39 @@ async function loadDataJson(event) {
 }
 
 function updateBackupUI(justSaved = false) {
-  if (saveFileHandle) {
+  const statusPanel = $("#saveStatusPanel");
+  statusPanel.dataset.syncState = cloudState.phase;
+  elements.cloudSetupNotice.hidden = cloudState.configured;
+  elements.cloudLoginForm.hidden =
+    !cloudState.configured ||
+    (cloudState.phase !== "signed-out" && !(cloudState.phase === "error" && !cloudState.email));
+  elements.cloudAccount.hidden =
+    !cloudState.configured ||
+    !["connecting", "syncing", "synced", "error"].includes(cloudState.phase) ||
+    !cloudState.email;
+  $("#cloudAccountEmail").textContent = cloudState.email;
+
+  if (cloudState.phase === "synced") {
+    elements.backupStatus.textContent = "クラウド同期済み";
+    elements.saveStatusTitle.textContent = "すべての端末で同期中";
+    elements.saveStatusCopy.textContent = `${cloudState.email} として安全に同期しています。`;
+  } else if (cloudState.phase === "syncing") {
+    elements.backupStatus.textContent = "クラウドへ保存中…";
+    elements.saveStatusTitle.textContent = "変更を同期しています";
+    elements.saveStatusCopy.textContent = "完了すると別の端末へ自動反映されます。";
+  } else if (cloudState.phase === "connecting" || cloudState.phase === "loading") {
+    elements.backupStatus.textContent = "クラウドへ接続中…";
+    elements.saveStatusTitle.textContent = "Firebase へ接続中";
+    elements.saveStatusCopy.textContent = "端末内のデータは引き続き保存されています。";
+  } else if (cloudState.phase === "error") {
+    elements.backupStatus.textContent = "クラウド同期エラー";
+    elements.saveStatusTitle.textContent = "クラウド同期を確認してください";
+    elements.saveStatusCopy.textContent = cloudState.error;
+  } else if (cloudState.phase === "signed-out") {
+    elements.backupStatus.textContent = "ログインが必要";
+    elements.saveStatusTitle.textContent = "クラウド同期は停止中";
+    elements.saveStatusCopy.textContent = "同じアカウントでログインすると端末間同期を開始します。";
+  } else if (saveFileHandle) {
     elements.backupStatus.textContent = justSaved ? "ファイルへ同期済み" : "保存ファイル接続中";
     elements.saveStatusTitle.textContent = "保存ファイルを接続中";
     elements.saveStatusCopy.textContent = `「${saveFileHandle.name}」へ変更を自動同期します。`;
@@ -2401,9 +2482,32 @@ $("#openBackup").addEventListener("click", () => {
   elements.backupDialog.showModal();
   document.body.classList.remove("sidebar-open");
   updateSidebarControls();
-  requestAnimationFrame(() => $("#connectSave").focus());
+  requestAnimationFrame(() => {
+    const focusTarget = !elements.cloudLoginForm.hidden ? elements.cloudEmail : $("#downloadSave");
+    focusTarget.focus();
+  });
 });
 $("#closeBackup").addEventListener("click", () => elements.backupDialog.close());
+elements.cloudLoginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.cloudLogin.disabled = true;
+  try {
+    await cloudSync.signIn(
+      elements.cloudEmail.value.trim(),
+      elements.cloudPassword.value,
+    );
+    elements.cloudPassword.value = "";
+    showToast("クラウド同期へログインしました");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.cloudLogin.disabled = false;
+  }
+});
+elements.cloudLogout.addEventListener("click", async () => {
+  await cloudSync.signOut();
+  showToast("クラウド同期からログアウトしました");
+});
 $("#connectSave").addEventListener("click", connectSaveFile);
 $("#downloadSave").addEventListener("click", downloadBackup);
 $("#restoreSave").addEventListener("click", () => $("#restoreInput").click());
@@ -2893,8 +2997,7 @@ if ("serviceWorker" in navigator) {
 }
 
 render();
-restoreFileConnection();
-restoreIDBData();
+Promise.all([restoreFileConnection(), restoreIDBData()]).then(() => cloudSync.start());
 updateSidebarControls();
 
 const initialSeriesId = location.hash.startsWith("#series=")

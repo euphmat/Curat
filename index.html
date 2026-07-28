@@ -273,7 +273,7 @@
           <button class="close-button" id="closeBackup" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
         </div>
         <p class="sheet-lead">
-          進捗は自動でブラウザに保存されます。保存ファイルを接続すると、サイトデータを消してもファイルから復元できます。
+          進捗はこの端末へ自動保存されます。Firebase にログインすると、iPad とパソコンの間でも自動同期されます。
         </p>
         <div class="save-status" id="saveStatusPanel">
           <span class="status-light"></span>
@@ -282,6 +282,28 @@
             <p id="saveStatusCopy">外部の保存ファイルはまだ接続されていません。</p>
           </div>
         </div>
+        <div class="cloud-setup-notice" id="cloudSetupNotice">
+          <strong>クラウド同期の初期設定が必要です</strong>
+          <p><code>firebase-config.js</code> を設定して GitHub Pages へ反映してください。詳しい手順は Readme にあります。</p>
+        </div>
+        <form class="cloud-login-form" id="cloudLoginForm" hidden>
+          <label>
+            <span>メールアドレス</span>
+            <input id="cloudEmail" type="email" autocomplete="username" required />
+          </label>
+          <label>
+            <span>パスワード</span>
+            <input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" required />
+          </label>
+          <button class="primary-button" id="cloudLogin" type="submit">
+            <svg class="icon" aria-hidden="true"><use href="#icon-cloud"></use></svg>同期へログイン
+          </button>
+        </form>
+        <div class="cloud-account" id="cloudAccount" hidden>
+          <span><small>ログイン中</small><strong id="cloudAccountEmail"></strong></span>
+          <button class="secondary-button" id="cloudLogout" type="button">ログアウト</button>
+        </div>
+        <p class="backup-subtitle">手動バックアップ</p>
         <div class="backup-actions">
           <button class="backup-action-card" id="connectSave" type="button">
             <span class="action-icon"><svg class="icon" aria-hidden="true"><use href="#icon-cloud"></use></svg></span>
@@ -304,7 +326,7 @@
           <strong>保存ルール</strong>
           <ol>
             <li>操作のたびにブラウザへ自動保存</li>
-            <li>接続中の保存ファイルへも自動で上書き</li>
+            <li>ログイン中は Firebase と別端末へ自動同期</li>
             <li>API キーだけは安全のためファイルに含めない</li>
           </ol>
         </div>

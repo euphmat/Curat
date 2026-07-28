@@ -22,7 +22,7 @@ YouTube のゲーム実況プレイリストを、動画ごとの視聴進捗と
 - 1 プレイリストにつき「視聴中」は 1 本だけ
 - ヘッダーから登録中の全プレイリストとフォルダーを一括削除
 - 再同期時は既存の進捗を維持し、新着動画だけを追加
-- ブラウザへの自動保存、JSON バックアップ、対応ブラウザでの外部保存ファイル自動同期
+- ブラウザへの自動保存、JSON バックアップ、Firebase を使った端末間リアルタイム同期
 - オフライン用のアプリシェルキャッシュ
 - PC・タブレット・スマートフォン対応
 
@@ -49,14 +49,83 @@ API キーはブラウザのローカル領域だけに保存し、JSON バッ�
 
 ## データ保存のルール
 
-進捗は操作のたびに `localStorage` へ保存します。通常のブラウザキャッシュ削除では維持されます。
-「サイトデータ」まで削除するとブラウザ内データは消えるため、次のどちらかを併用してください。
+進捗は操作のたびに `localStorage` と IndexedDB へ保存します。Firebase を設定してログインすると、
+同じアカウントでログインした iPad・パソコン間にも変更がリアルタイム反映されます。
 
-- Chrome / Edge: 「保存データ」から JSON ファイルを接続。以後の変更を同じファイルへ自動同期
-- その他のブラウザ: 定期的に JSON バックアップをダウンロードし、必要時に復元
+Firebase が未設定、未ログイン、または一時的にオフラインでも端末内への保存は継続します。
+再接続時は `updatedAt` が新しい側を同期します。JSON のダウンロード・復元と、対応ブラウザでの
+外部保存ファイル接続も手動バックアップとして引き続き利用できます。
 
 サイトデータ削除後に既存の保存ファイルを再接続すると、空データで上書きせず、ファイル側のプレイリストを先に復元します。
 API キーは保存ファイルに含まれないため、サイトデータ削除後は再設定が必要です。
+
+## 0 円の端末間同期を設定
+
+同期には Firebase Authentication と Realtime Database の Spark（無料）プランを使います。
+Spark プランは支払い方法の登録が不要で、Realtime Database は 1 GB 保存・月 10 GB
+ダウンロードまで無料です。個人用の Curat では十分な容量です。上限を超えた場合も Spark
+プランのままなら課金されず、その月のサービスが停止します。
+
+### 1. Firebase プロジェクトを作成
+
+1. [Firebase Console](https://console.firebase.google.com/) でプロジェクトを作成
+2. Google Analytics は Curat には不要なので無効で構いません
+3. 「プロジェクトの設定」→「マイアプリ」→ Web（`</>`）を選び、Web アプリを登録
+4. 表示された `firebaseConfig` を控える
+
+### 2. メール／パスワード認証を設定
+
+1. Firebase Console の「Authentication」→「始める」
+2. 「Sign-in method」で「メール／パスワード」を有効化
+3. 「Users」→「ユーザーを追加」で、自分用のメールアドレスと十分に強いパスワードを登録
+4. 作成されたユーザーの「ユーザー UID」を控える
+5. 「Settings」→「Authorized domains」に GitHub Pages のホスト名
+   （例: `USERNAME.github.io`）がなければ追加
+
+アプリから新規ユーザーを作る機能は意図的に用意していません。Firebase Console で作った
+1 アカウントだけを使います。
+
+### 3. Realtime Database とセキュリティルールを設定
+
+1. Firebase Console の「Realtime Database」→「データベースを作成」
+2. 場所は近いリージョンを選択
+3. セキュリティルールはロックモードで開始
+4. [firebase-database-rules.json](./firebase-database-rules.json) の
+   `ここを自分のFirebase_UIDへ置換`（3 箇所）を手順 2 の UID に置き換える
+5. Realtime Database の「ルール」へ内容を貼り付け、「公開」
+
+このルールにより、その UID でログインした本人だけが Curat データを読み書きできます。
+
+### 4. Curat に Firebase の接続情報を設定
+
+[firebase-config.js](./firebase-config.js) を開き、手順 1 の `firebaseConfig` の各値を貼り付けます。
+Realtime Database 作成後の設定に含まれる `databaseURL` も必須です。
+
+```js
+export const firebaseConfig = {
+  apiKey: "AIza...",
+  authDomain: "PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://DATABASE_NAME.REGION.firebasedatabase.app",
+  projectId: "PROJECT_ID",
+  appId: "1:...",
+};
+```
+
+Firebase の Web 用設定値は公開前提の識別情報であり、秘密鍵ではありません。データ保護は
+手順 3 のセキュリティルールで行います。設定済みファイルを GitHub へ commit / push し、
+GitHub Pages の更新を待ってください。
+
+### 5. 各端末で一度だけログイン
+
+1. 更新後の Curat を開く（古い表示なら再読み込み）
+2. 左下の「保存データ」を開く
+3. 手順 2 で作った同じメールアドレスとパスワードでログイン
+4. 表示が「すべての端末で同期中」になったことを確認
+5. iPad とパソコンの両方で同じ操作を行う
+
+最初にログインした端末の既存データは、クラウドが空なら自動アップロードされます。クラウドと
+端末の両方にデータがある場合は、更新日時が新しい側を採用します。同期後も念のため、ときどき
+「バックアップを保存」で JSON を手元に残すことを推奨します。
 
 ## タスク管理ルール
 

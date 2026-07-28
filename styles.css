@@ -2197,6 +2197,126 @@ body.detail-pinned .detail-sidebar {
   font-size: 13px;
 }
 
+.save-status[data-sync-state="error"] .status-light {
+  background: #ff7a6f;
+  box-shadow: 0 0 0 3px rgba(255, 122, 111, 0.2);
+}
+
+.save-status[data-sync-state="loading"] .status-light,
+.save-status[data-sync-state="connecting"] .status-light,
+.save-status[data-sync-state="syncing"] .status-light {
+  background: #78d7ff;
+  box-shadow: 0 0 0 3px rgba(120, 215, 255, 0.2);
+}
+
+.save-status[data-sync-state="signed-out"] .status-light,
+.save-status[data-sync-state="not-configured"] .status-light {
+  background: #8f889e;
+  box-shadow: none;
+}
+
+.cloud-setup-notice {
+  margin-bottom: 16px;
+  padding: 14px 15px;
+  background: rgba(120, 215, 255, 0.08);
+  border: 1px solid rgba(120, 215, 255, 0.35);
+  border-radius: 11px;
+}
+
+.cloud-setup-notice strong,
+.cloud-account strong,
+.cloud-account small {
+  display: block;
+}
+
+.cloud-setup-notice p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.cloud-setup-notice code {
+  color: #fff;
+}
+
+.cloud-login-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  gap: 9px;
+  margin-bottom: 17px;
+}
+
+.cloud-login-form[hidden],
+.cloud-account[hidden],
+.cloud-setup-notice[hidden] {
+  display: none;
+}
+
+.cloud-login-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cloud-login-form input {
+  width: 100%;
+  min-width: 0;
+  height: 43px;
+  padding: 0 11px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.cloud-login-form .primary-button {
+  min-height: 43px;
+  white-space: nowrap;
+}
+
+.cloud-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 17px;
+  padding: 12px 14px;
+  background: rgba(214, 239, 85, 0.06);
+  border: 1px solid rgba(214, 239, 85, 0.28);
+  border-radius: 11px;
+}
+
+.cloud-account small {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.cloud-account strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+}
+
+.backup-subtitle {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 620px) {
+  .cloud-login-form {
+    grid-template-columns: 1fr;
+  }
+}
+
 .backup-actions {
   display: grid;
   gap: 8px;
