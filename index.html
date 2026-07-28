@@ -365,16 +365,59 @@
       <form method="dialog" class="sheet" id="folderForm">
         <div class="sheet-head">
           <div>
-            <span class="folder-editor-eyebrow" id="folderEditorEyebrow">ライブラリを整理</span>
-            <h2 id="folderDialogTitle">新しいフォルダー</h2>
+            <span class="folder-editor-eyebrow">ライブラリを整理</span>
+            <h2>新しいフォルダー</h2>
           </div>
           <button class="close-button" value="cancel" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
         </div>
-        <p class="sheet-lead" id="folderDialogLead">
+        <p class="sheet-lead">
           ゲームごとのフォルダーを作り、複数の実況プレイリストをひとまとめにできます。
         </p>
         <label class="field">
           <span>フォルダー名 / ゲームの正式名</span>
+          <input
+            class="plain-input"
+            id="newFolderNameInput"
+            placeholder="例：ポケットモンスター"
+            autocomplete="off"
+            required
+          />
+          <small id="newFolderNameError" class="field-error" aria-live="polite"></small>
+        </label>
+        <label class="field">
+          <span>別名・表記ゆれ</span>
+          <textarea
+            class="plain-input alias-input"
+            id="newFolderAliasesInput"
+            placeholder="Pocket Monsters&#10;Pockets Monsters&#10;Pokémon"
+          ></textarea>
+          <small>1行に1つ登録すると、新しいプレイリストをこのフォルダーへ自動分類できます。自動判定した表記は学習用DBにも保存されます。</small>
+        </label>
+        <div class="info-box">
+          <strong>アイコンは作成後に選べます</strong>
+          <p>フォルダーを作成したあと、右クリックメニューの「アイコンを変更」から絵文字を設定できます。</p>
+        </div>
+        <div class="sheet-actions">
+          <button class="secondary-button" value="cancel" type="button">キャンセル</button>
+          <button class="primary-button" id="saveFolder" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-folder-plus"></use></svg><span>フォルダーを作成</span></button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="sheet-dialog folder-rename-dialog" id="renameFolderDialog">
+      <form method="dialog" class="sheet" id="renameFolderForm">
+        <div class="sheet-head">
+          <div>
+            <span class="folder-editor-eyebrow">フォルダー情報</span>
+            <h2>フォルダー名を変更</h2>
+          </div>
+          <button class="close-button" value="cancel" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
+        </div>
+        <p class="sheet-lead">
+          中にあるプレイリストは、新しいフォルダー名へまとめて移動します。
+        </p>
+        <label class="field">
+          <span>新しいフォルダー名</span>
           <input
             class="plain-input"
             id="folderNameInput"
@@ -384,17 +427,28 @@
           />
           <small id="folderNameError" class="field-error" aria-live="polite"></small>
         </label>
-        <label class="field">
-          <span>別名・表記ゆれ</span>
-          <textarea
-            class="plain-input alias-input"
-            id="folderAliasesInput"
-            placeholder="Pocket Monsters&#10;Pockets Monsters&#10;Pokémon"
-          ></textarea>
-          <small>1行に1つ登録すると、新しいプレイリストをこのフォルダーへ自動分類できます。自動判定した表記は学習用DBにも保存されます。</small>
-        </label>
+        <div class="folder-summary" id="renameFolderSummary"></div>
+        <div class="sheet-actions">
+          <button class="secondary-button" value="cancel" type="button">キャンセル</button>
+          <button class="primary-button" id="saveFolderName" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg><span>名前を変更</span></button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="sheet-dialog folder-dialog folder-icon-dialog" id="folderIconDialog">
+      <form method="dialog" class="sheet" id="folderIconForm">
+        <div class="sheet-head">
+          <div>
+            <span class="folder-editor-eyebrow">見た目をカスタマイズ</span>
+            <h2>フォルダーアイコンを変更</h2>
+          </div>
+          <button class="close-button" value="cancel" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
+        </div>
+        <p class="sheet-lead" id="folderIconDialogLead">
+          フォルダーを見分けやすい絵文字に変更できます。
+        </p>
         <fieldset class="folder-icon-picker">
-          <legend>フォルダーアイコン</legend>
+          <legend>選択中のアイコン</legend>
           <div class="folder-icon-picker-head">
             <span class="folder-icon-current" id="folderIconCurrent" aria-hidden="true">
               <svg class="icon"><use href="#icon-folder"></use></svg>
@@ -405,13 +459,29 @@
             </span>
             <button class="icon-reset-button" id="resetFolderIcon" type="button">標準に戻す</button>
           </div>
+          <section class="recent-folder-icons" id="recentFolderIconsSection" hidden>
+            <div class="folder-icon-section-head">
+              <strong>最近使った絵文字</strong>
+              <small>よく使うアイコンをすぐ選べます</small>
+            </div>
+            <div
+              class="folder-icon-results folder-icon-results-recent"
+              id="recentFolderIcons"
+              role="listbox"
+              aria-label="最近使った絵文字"
+            ></div>
+          </section>
+          <div class="folder-icon-section-head folder-icon-search-head">
+            <strong>絵文字を探す</strong>
+            <small>キーワードでカラー絵文字を検索</small>
+          </div>
           <label class="folder-icon-search">
             <svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg>
-            <span class="sr-only">SVGアイコンを検索</span>
+            <span class="sr-only">絵文字を検索</span>
             <input
               id="folderIconSearch"
               type="search"
-            placeholder="カラーアイコンを検索"
+              placeholder="例：ゲーム、宇宙、動物"
               autocomplete="off"
             />
             <span class="icon-search-spinner" aria-hidden="true"></span>
@@ -424,27 +494,12 @@
           ></div>
           <small class="folder-icon-status" id="folderIconStatus" aria-live="polite"></small>
         </fieldset>
-        <div class="folder-summary" id="folderDialogSummary" hidden></div>
-        <div class="sheet-actions sheet-actions-split">
-          <button class="danger-button" id="deleteFolder" value="cancel" type="button" hidden><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>フォルダーを削除</button>
-          <span></span>
+        <div class="sheet-actions">
           <button class="secondary-button" value="cancel" type="button">キャンセル</button>
-          <button class="primary-button" id="saveFolder" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-folder-plus"></use></svg><span>フォルダーを作成</span></button>
+          <button class="primary-button" id="saveFolderIcon" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg><span>アイコンを保存</span></button>
         </div>
       </form>
     </dialog>
-
-    <div
-      class="folder-editor-popover"
-      id="folderEditorPopover"
-      role="dialog"
-      aria-modal="false"
-      aria-labelledby="folderDialogTitle"
-      aria-describedby="folderDialogLead"
-      hidden
-    >
-      <span class="folder-editor-popover-arrow" aria-hidden="true"></span>
-    </div>
 
     <dialog class="confirm-dialog" id="confirmDialog">
       <form method="dialog" class="confirm-card" id="confirmForm">

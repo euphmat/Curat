@@ -2,6 +2,8 @@ import { CloudSync } from "./cloud-sync.js";
 
 const APP_VERSION = 1;
 const API_BASE = "https://www.googleapis.com/youtube/v3";
+const RECENT_FOLDER_ICONS_KEY = "curat-recent-folder-icons-v1";
+const RECENT_FOLDER_ICONS_LIMIT = 6;
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 480;
 const RECENT_IMPORT_CORRECTION_MS = 5 * 60 * 1000;
@@ -96,11 +98,17 @@ const elements = {
   projectSearch: $("#projectSearch"),
   folderDialog: $("#folderDialog"),
   folderForm: $("#folderForm"),
-  folderEditorPopover: $("#folderEditorPopover"),
+  newFolderName: $("#newFolderNameInput"),
+  newFolderAliases: $("#newFolderAliasesInput"),
+  renameFolderDialog: $("#renameFolderDialog"),
+  renameFolderForm: $("#renameFolderForm"),
   folderName: $("#folderNameInput"),
-  folderAliases: $("#folderAliasesInput"),
+  folderIconDialog: $("#folderIconDialog"),
+  folderIconForm: $("#folderIconForm"),
   folderIconSearch: $("#folderIconSearch"),
   folderIconResults: $("#folderIconResults"),
+  recentFolderIconsSection: $("#recentFolderIconsSection"),
+  recentFolderIcons: $("#recentFolderIcons"),
   folderIconStatus: $("#folderIconStatus"),
   folderIconCurrent: $("#folderIconCurrent"),
   folderIconSelection: $("#folderIconSelection"),
@@ -131,8 +139,8 @@ let editingFolderOriginalName = null;
 let selectedFolderIcon = "";
 let folderIconSearchTimer = null;
 let folderIconSearchController = null;
-let folderEditorPresentation = "dialog";
-let folderEditorAnchor = null;
+let editingFolderIconName = null;
+let recentFolderIcons = [];
 let selectedTreeKey = "";
 let contextTarget = null;
 let confirmResolver = null;
@@ -295,6 +303,31 @@ function folderIconMarkup(value) {
   const url = iconifySvgUrl(builtin?.icon || iconName);
   return `<img class="folder-color-icon" src="${escapeHtml(url)}" alt="" loading="lazy" />`;
 }
+
+function loadRecentFolderIcons() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RECENT_FOLDER_ICONS_KEY) || "[]");
+    if (!Array.isArray(saved)) return [];
+    return [...new Set(saved.map(normalizeFolderIcon).filter(Boolean))]
+      .slice(0, RECENT_FOLDER_ICONS_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function rememberRecentFolderIcon(value) {
+  const iconName = normalizeFolderIcon(value);
+  if (!iconName) return;
+  recentFolderIcons = [iconName, ...recentFolderIcons.filter((item) => item !== iconName)]
+    .slice(0, RECENT_FOLDER_ICONS_LIMIT);
+  try {
+    localStorage.setItem(RECENT_FOLDER_ICONS_KEY, JSON.stringify(recentFolderIcons));
+  } catch {
+    // The icon change still succeeds when private browsing blocks local storage.
+  }
+}
+
+recentFolderIcons = loadRecentFolderIcons();
 
 function displayFolderName(value) {
   return toUpperCamelCase(value);
@@ -1068,7 +1101,7 @@ function updateFolderIconSelection() {
       ? builtin.label
       : "標準のフォルダー"
     : label;
-  $$("[data-folder-icon]", elements.folderIconResults).forEach((button) => {
+  $$("[data-folder-icon]", elements.folderIconDialog).forEach((button) => {
     const selected = button.dataset.folderIcon === selectedFolderIcon;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-selected", String(selected));
@@ -1076,40 +1109,49 @@ function updateFolderIconSelection() {
 }
 
 function activeFolderEditorContainer() {
-  return folderEditorPresentation === "popover"
-    ? elements.folderEditorPopover
-    : elements.folderDialog;
+  return elements.folderIconDialog;
+}
+
+function folderIconOptionMarkup(item) {
+  return `
+    <button
+      class="folder-icon-option"
+      type="button"
+      role="option"
+      data-folder-icon="${escapeHtml(item.value)}"
+      aria-selected="${item.value === selectedFolderIcon}"
+      title="${escapeHtml(item.label)}"
+    >
+      <span aria-hidden="true">${folderIconMarkup(item.value)}</span>
+      <small>${escapeHtml(item.label)}</small>
+    </button>
+  `;
+}
+
+function renderRecentFolderIcons() {
+  const items = recentFolderIcons.map((value) => {
+    const builtin = builtinFolderIcon(value);
+    return {
+      value,
+      label: builtin?.label || value.replace(":", " · ").replaceAll("-", " "),
+    };
+  });
+  elements.recentFolderIconsSection.hidden = items.length === 0;
+  elements.recentFolderIcons.innerHTML = items.map(folderIconOptionMarkup).join("");
 }
 
 function renderFolderIconResults(items, status) {
   const uniqueItems = [...new Map(items.map((item) => [item.value, item])).values()];
-  elements.folderIconResults.innerHTML = uniqueItems
-    .map((item) => {
-      const builtin = builtinFolderIcon(item.value);
-      const artwork = folderIconMarkup(item.value);
-      return `
-        <button
-          class="folder-icon-option"
-          type="button"
-          role="option"
-          data-folder-icon="${escapeHtml(item.value)}"
-          aria-selected="${item.value === selectedFolderIcon}"
-          title="${escapeHtml(item.label)}"
-        >
-          <span aria-hidden="true">${artwork}</span>
-          <small>${escapeHtml(item.label)}</small>
-        </button>
-      `;
-    })
-    .join("");
+  elements.folderIconResults.innerHTML = uniqueItems.map(folderIconOptionMarkup).join("");
   elements.folderIconStatus.textContent = status;
+  renderRecentFolderIcons();
   updateFolderIconSelection();
 }
 
 function showBuiltinFolderIcons() {
   renderFolderIconResults(
     BUILTIN_FOLDER_ICONS,
-    "まずは内蔵アイコンから選べます。検索すると、さらに多くのSVGが見つかります。",
+    "定番の絵文字です。検索すると、さらに多くのカラー絵文字が見つかります。",
   );
 }
 
@@ -1172,138 +1214,85 @@ function folderRowByName(projectName) {
   );
 }
 
-function positionFolderEditorPopover() {
-  if (elements.folderEditorPopover.hidden) return;
-  const anchor = folderEditorAnchor?.isConnected
-    ? folderEditorAnchor
-    : folderRowByName(editingFolderOriginalName);
-  if (!anchor) return;
-
-  const gap = 14;
-  const edge = 12;
-  const anchorRect = anchor.getBoundingClientRect();
-  const popoverRect = elements.folderEditorPopover.getBoundingClientRect();
-  let left = anchorRect.right + gap;
-  if (left + popoverRect.width > window.innerWidth - edge) {
-    left = anchorRect.left - popoverRect.width - gap;
-  }
-  left = Math.max(edge, Math.min(left, window.innerWidth - popoverRect.width - edge));
-  const top = Math.max(
-    edge,
-    Math.min(anchorRect.top - 28, window.innerHeight - popoverRect.height - edge),
-  );
-  const arrowTop = Math.max(
-    24,
-    Math.min(anchorRect.top + anchorRect.height / 2 - top, popoverRect.height - 24),
-  );
-
-  elements.folderEditorPopover.style.left = `${Math.round(left)}px`;
-  elements.folderEditorPopover.style.top = `${Math.round(top)}px`;
-  elements.folderEditorPopover.style.setProperty("--folder-popover-arrow-top", `${arrowTop}px`);
-  elements.folderEditorPopover.classList.toggle(
-    "opens-to-left",
-    left < anchorRect.left,
-  );
-}
-
-function closeFolderEditor({ restoreFocus = true } = {}) {
-  const wasPopover = folderEditorPresentation === "popover";
-  const anchor = folderEditorAnchor;
+function stopFolderIconSearch() {
   clearTimeout(folderIconSearchTimer);
   folderIconSearchController?.abort();
   folderIconSearchController = null;
-  elements.folderDialog.classList.remove("is-searching-icons");
-  elements.folderEditorPopover.classList.remove("is-searching-icons");
-
-  if (elements.folderDialog.open) elements.folderDialog.close();
-  elements.folderEditorPopover.hidden = true;
-  elements.folderEditorPopover.removeAttribute("style");
-  if (elements.folderForm.parentElement !== elements.folderDialog) {
-    elements.folderDialog.append(elements.folderForm);
-  }
-  folderEditorPresentation = "dialog";
-  folderEditorAnchor = null;
-  editingFolderOriginalName = null;
-
-  if (restoreFocus && wasPopover) {
-    requestAnimationFrame(() => {
-      const nextAnchor = anchor?.isConnected
-        ? anchor
-        : folderRowByName(anchor?.dataset.treeFolder || "");
-      nextAnchor?.focus();
-    });
-  }
+  elements.folderIconDialog.classList.remove("is-searching-icons");
 }
 
-function prepareFolderEditor(projectName = null, presentation = "dialog") {
+function openFolderDialog() {
   closeTreeContextMenu();
-  if (
-    !elements.folderEditorPopover.hidden ||
-    elements.folderDialog.open ||
-    elements.folderForm.parentElement !== elements.folderDialog
-  ) {
-    closeFolderEditor({ restoreFocus: false });
-  }
-  folderEditorPresentation = presentation;
-  editingFolderOriginalName = projectName;
-  const rule = projectName ? projectRuleByName(projectName) : null;
-  const seriesCount = projectName
-    ? data.series.filter((series) => (series.project || series.title) === projectName).length
-    : 0;
-  $("#folderEditorEyebrow").textContent =
-    presentation === "popover" ? "クイック編集" : "ライブラリを整理";
-  $("#folderDialogTitle").textContent = projectName ? "フォルダーを編集" : "新しいフォルダー";
-  $("#folderDialogLead").textContent = projectName
-    ? presentation === "popover"
-      ? "名前・別名・アイコンをその場で調整できます。名前を変えると、中のプレイリストも一緒に移動します。"
-      : "フォルダー名を変更すると、中のプレイリストもまとめて移動します。別名は今後の自動分類に使われます。"
-    : "ゲームごとのフォルダーを作り、複数の実況プレイリストをひとまとめにできます。";
-  elements.folderName.value = projectName ? displayFolderName(projectName) : "";
-  elements.folderAliases.value = (rule?.aliases || []).join("\n");
-  selectedFolderIcon = normalizeFolderIcon(rule?.icon);
-  elements.folderIconSearch.value = "";
-  showBuiltinFolderIcons();
-  $("#folderNameError").textContent = "";
-  $("#saveFolder").innerHTML = `${icon(projectName ? "save" : "folder-plus")}<span>${
-    projectName ? "変更を保存" : "フォルダーを作成"
-  }</span>`;
-  $("#deleteFolder").hidden = !projectName;
-  $("#folderDialogSummary").hidden = !projectName;
-  $("#folderDialogSummary").innerHTML = projectName
-    ? `<strong>${seriesCount} 件のプレイリスト</strong>がこのフォルダーに入っています。`
-    : "";
-}
-
-function openFolderDialog(projectName = null) {
-  if (projectName) {
-    openFolderEditorPopover(projectName);
-    return;
-  }
-  prepareFolderEditor(null, "dialog");
+  elements.newFolderName.value = "";
+  elements.newFolderAliases.value = "";
+  $("#newFolderNameError").textContent = "";
   elements.folderDialog.showModal();
-  requestAnimationFrame(() => elements.folderName.select());
+  setTimeout(() => elements.newFolderName.focus());
 }
 
-function openFolderEditorPopover(projectName, anchor = null, focusTarget = "name") {
-  const resolvedAnchor = anchor || folderRowByName(projectName);
-  prepareFolderEditor(projectName, "popover");
-  folderEditorAnchor = resolvedAnchor;
-  elements.folderEditorPopover.append(elements.folderForm);
-  elements.folderEditorPopover.hidden = false;
-  positionFolderEditorPopover();
-  requestAnimationFrame(() => {
-    positionFolderEditorPopover();
-    if (focusTarget === "icon") {
-      elements.folderIconSearch.focus();
-      elements.folderIconSearch.select();
-      elements.folderIconSearch.scrollIntoView({ block: "center" });
-    } else {
-      elements.folderName.select();
-    }
+function openRenameFolderDialog(projectName) {
+  closeTreeContextMenu();
+  editingFolderOriginalName = projectName;
+  const seriesCount = data.series.filter(
+    (series) => (series.project || series.title) === projectName,
+  ).length;
+  elements.folderName.value = displayFolderName(projectName);
+  $("#folderNameError").textContent = "";
+  $("#renameFolderSummary").innerHTML =
+    `<strong>${seriesCount} 件のプレイリスト</strong>が新しい名前へ移動します。`;
+  elements.renameFolderDialog.showModal();
+  setTimeout(() => {
+    elements.folderName.focus();
+    elements.folderName.select();
   });
 }
 
-function saveFolderFromDialog() {
+function openFolderIconDialog(projectName) {
+  closeTreeContextMenu();
+  editingFolderIconName = projectName;
+  selectedFolderIcon = normalizeFolderIcon(projectRuleByName(projectName)?.icon);
+  elements.folderIconSearch.value = "";
+  $("#folderIconDialogLead").textContent =
+    `「${displayFolderName(projectName)}」のアイコンを選んでください。`;
+  showBuiltinFolderIcons();
+  elements.folderIconDialog.showModal();
+  setTimeout(() => elements.folderIconSearch.focus());
+}
+
+function saveNewFolder() {
+  const enteredName = elements.newFolderName.value.trim();
+  const name = displayFolderName(enteredName);
+  const duplicate = findEquivalentProjectName(name);
+  if (!name) {
+    $("#newFolderNameError").textContent = "フォルダー名を入力してください。";
+    elements.newFolderName.focus();
+    return false;
+  }
+  if (duplicate) {
+    $("#newFolderNameError").textContent = `「${duplicate}」はすでに存在します。`;
+    elements.newFolderName.focus();
+    return false;
+  }
+
+  let aliases = parseAliases(elements.newFolderAliases.value).filter(
+    (alias) => normalizeProjectMatch(alias) !== normalizeProjectMatch(name),
+  );
+  if (enteredName !== name) aliases = [...new Set([...aliases, enteredName])];
+
+  data.projects.push({ name, aliases, learnedAliases: [], icon: "" });
+  config.expandedProjects ||= {};
+  config.expandedProjects[name] = true;
+
+  saveData();
+  selectedTreeKey = `folder:${name}`;
+  elements.folderDialog.close();
+  render();
+  requestAnimationFrame(() => folderRowByName(name)?.focus());
+  showToast(`「${name}」を作成しました`);
+  return true;
+}
+
+function saveRenamedFolder() {
   const enteredName = elements.folderName.value.trim();
   const name = displayFolderName(enteredName);
   const originalName = editingFolderOriginalName;
@@ -1318,46 +1307,56 @@ function saveFolderFromDialog() {
     elements.folderName.focus();
     return false;
   }
+  if (!originalName) return false;
 
-  let aliases = parseAliases(elements.folderAliases.value).filter(
-    (alias) => normalizeProjectMatch(alias) !== normalizeProjectMatch(name),
-  );
+  const oldRule = projectRuleByName(originalName);
+  let aliases = [...(oldRule?.aliases || [])];
   if (enteredName !== name) aliases = [...new Set([...aliases, enteredName])];
-
-  if (!originalName) {
-    data.projects.push({ name, aliases, learnedAliases: [], icon: selectedFolderIcon });
-    config.expandedProjects ||= {};
-    config.expandedProjects[name] = true;
-  } else {
-    const oldRule = projectRuleByName(originalName);
-    if (originalName !== name) {
-      aliases = [...new Set([...aliases, originalName, ...(oldRule?.aliases || [])])].filter(
-        (alias) => normalizeProjectMatch(alias) !== normalizeProjectMatch(name),
-      );
-      for (const series of data.series) {
-        if ((series.project || series.title) === originalName) {
-          series.project = name;
-          series.updatedAt = new Date().toISOString();
-        }
+  if (originalName !== name) {
+    aliases = [...new Set([...aliases, originalName])].filter(
+      (alias) => normalizeProjectMatch(alias) !== normalizeProjectMatch(name),
+    );
+    for (const series of data.series) {
+      if ((series.project || series.title) === originalName) {
+        series.project = name;
+        series.updatedAt = new Date().toISOString();
       }
     }
-    const learnedAliases = [...(oldRule?.learnedAliases || [])];
-    data.projects = data.projects.filter((project) => project.name !== originalName);
-    data.projects.push({ name, aliases, learnedAliases, icon: selectedFolderIcon });
-    config.expandedProjects ||= {};
-    config.expandedProjects[name] = config.expandedProjects[originalName] !== false;
-    if (originalName !== name) delete config.expandedProjects[originalName];
   }
+
+  data.projects = data.projects.filter((project) => project.name !== originalName);
+  data.projects.push({
+    name,
+    aliases,
+    learnedAliases: [...(oldRule?.learnedAliases || [])],
+    icon: normalizeFolderIcon(oldRule?.icon),
+  });
+  config.expandedProjects ||= {};
+  config.expandedProjects[name] = config.expandedProjects[originalName] !== false;
+  if (originalName !== name) delete config.expandedProjects[originalName];
 
   saveData();
   selectedTreeKey = `folder:${name}`;
-  const wasPopover = folderEditorPresentation === "popover";
-  closeFolderEditor({ restoreFocus: false });
+  elements.renameFolderDialog.close();
+  editingFolderOriginalName = null;
   render();
-  if (wasPopover) {
-    requestAnimationFrame(() => folderRowByName(name)?.focus());
-  }
-  showToast(originalName ? `「${name}」へフォルダー名を変更しました` : `「${name}」を作成しました`);
+  requestAnimationFrame(() => folderRowByName(name)?.focus());
+  showToast(`「${name}」へフォルダー名を変更しました`);
+  return true;
+}
+
+function saveChangedFolderIcon() {
+  const projectName = editingFolderIconName;
+  const rule = projectName ? projectRuleByName(projectName) : null;
+  if (!rule) return false;
+  rule.icon = selectedFolderIcon;
+  rememberRecentFolderIcon(selectedFolderIcon);
+  saveData();
+  elements.folderIconDialog.close();
+  editingFolderIconName = null;
+  render();
+  requestAnimationFrame(() => folderRowByName(projectName)?.focus());
+  showToast(`「${displayFolderName(projectName)}」のアイコンを変更しました`);
   return true;
 }
 
@@ -1421,7 +1420,8 @@ async function deleteFolder(projectName) {
   if (config.expandedProjects) delete config.expandedProjects[projectName];
   saveData();
   selectedTreeKey = "";
-  closeFolderEditor({ restoreFocus: false });
+  if (elements.renameFolderDialog.open) elements.renameFolderDialog.close();
+  if (elements.folderIconDialog.open) elements.folderIconDialog.close();
   render();
   showToast(`「${projectName}」を削除しました`);
 }
@@ -1547,8 +1547,8 @@ async function runTreeContextAction(action) {
   closeTreeContextMenu();
   if (!target) return;
   if (action === "new-folder") openFolderDialog();
-  if (action === "edit-folder") openFolderEditorPopover(target.id);
-  if (action === "change-folder-icon") openFolderEditorPopover(target.id, null, "icon");
+  if (action === "edit-folder") openRenameFolderDialog(target.id);
+  if (action === "change-folder-icon") openFolderIconDialog(target.id);
   if (action === "expand-folder") setProjectExpanded(target.id, true);
   if (action === "collapse-folder") setProjectExpanded(target.id, false);
   if (action === "expand-all") setAllProjectsExpanded(true);
@@ -2376,7 +2376,7 @@ elements.projectTree.addEventListener("keydown", (event) => {
   }
   if (event.key === "F2") {
     event.preventDefault();
-    if (isFolder) openFolderEditorPopover(id, current);
+    if (isFolder) openRenameFolderDialog(id);
     else openProjectDialog(id);
     return;
   }
@@ -2428,13 +2428,32 @@ elements.projectSearch.addEventListener("keydown", (event) => {
 
 $("#folderForm").addEventListener("submit", (event) => {
   event.preventDefault();
-  saveFolderFromDialog();
+  saveNewFolder();
 });
 $("#folderForm").querySelectorAll(".close-button, .secondary-button").forEach((button) => {
-  button.addEventListener("click", () => closeFolderEditor());
+  button.addEventListener("click", () => elements.folderDialog.close());
+});
+elements.newFolderName.addEventListener("input", () => {
+  $("#newFolderNameError").textContent = "";
+});
+
+elements.renameFolderForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveRenamedFolder();
+});
+elements.renameFolderForm.querySelectorAll(".close-button, .secondary-button").forEach((button) => {
+  button.addEventListener("click", () => elements.renameFolderDialog.close());
 });
 elements.folderName.addEventListener("input", () => {
   $("#folderNameError").textContent = "";
+});
+
+elements.folderIconForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveChangedFolderIcon();
+});
+elements.folderIconForm.querySelectorAll(".close-button, .secondary-button").forEach((button) => {
+  button.addEventListener("click", () => elements.folderIconDialog.close());
 });
 elements.folderIconSearch.addEventListener("input", () => {
   clearTimeout(folderIconSearchTimer);
@@ -2455,7 +2474,7 @@ elements.folderIconSearch.addEventListener("keydown", (event) => {
     showBuiltinFolderIcons();
   }
 });
-elements.folderIconResults.addEventListener("click", (event) => {
+elements.folderIconDialog.addEventListener("click", (event) => {
   const option = event.target.closest("[data-folder-icon]");
   if (!option) return;
   selectedFolderIcon = normalizeFolderIcon(option.dataset.folderIcon);
@@ -2465,42 +2484,14 @@ $("#resetFolderIcon").addEventListener("click", () => {
   selectedFolderIcon = "";
   updateFolderIconSelection();
 });
-$("#deleteFolder").addEventListener("click", () => {
-  if (editingFolderOriginalName) deleteFolder(editingFolderOriginalName);
-});
 
-elements.folderDialog.addEventListener("close", () => {
-  if (folderEditorPresentation === "dialog") editingFolderOriginalName = null;
+elements.renameFolderDialog.addEventListener("close", () => {
+  editingFolderOriginalName = null;
 });
-
-document.addEventListener("pointerdown", (event) => {
-  if (
-    folderEditorPresentation !== "popover" ||
-    elements.folderEditorPopover.hidden ||
-    elements.confirmDialog.open ||
-    elements.folderEditorPopover.contains(event.target) ||
-    event.target.closest("[data-context-action='edit-folder']")
-  ) {
-    return;
-  }
-  closeFolderEditor({ restoreFocus: false });
+elements.folderIconDialog.addEventListener("close", () => {
+  stopFolderIconSearch();
+  editingFolderIconName = null;
 });
-
-document.addEventListener("keydown", (event) => {
-  if (
-    event.key === "Escape" &&
-    folderEditorPresentation === "popover" &&
-    !elements.folderEditorPopover.hidden &&
-    !elements.confirmDialog.open &&
-    !elements.folderIconSearch.value
-  ) {
-    event.preventDefault();
-    closeFolderEditor();
-  }
-});
-
-window.addEventListener("resize", positionFolderEditorPopover);
-elements.sidebar.addEventListener("scroll", positionFolderEditorPopover, true);
 
 elements.contextMenu.addEventListener("click", (event) => {
   const item = event.target.closest("[data-context-action]");

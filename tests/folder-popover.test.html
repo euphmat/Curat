@@ -44,40 +44,73 @@
       appDocument.querySelector("[data-context-action='edit-folder']").click();
 
       setTimeout(() => {
-        const popover = appDocument.querySelector("#folderEditorPopover");
-        const form = appDocument.querySelector("#folderForm");
-        const openedContextually =
+        const renameDialog = appDocument.querySelector("#renameFolderDialog");
+        const renameForm = appDocument.querySelector("#renameFolderForm");
+        const openedRenameOnly =
           !appDocument.querySelector("#folderDialog").open &&
-          !popover.hidden &&
-          form.parentElement === popover &&
-          appDocument.activeElement === appDocument.querySelector("#folderNameInput") &&
-          appDocument.querySelector("#folderAliasesInput").value === "旧別名";
+          renameDialog.open &&
+          !appDocument.querySelector("#folderIconDialog").open &&
+          appDocument.activeElement === appDocument.querySelector("#folderNameInput");
 
         appDocument.querySelector("#folderNameInput").value = "新しいフォルダー名";
-        appDocument.querySelector("#folderAliasesInput").value = "別名A\n別名B";
-        appDocument.querySelector("[data-folder-icon='builtin:sword']").click();
-        form.requestSubmit(appDocument.querySelector("#saveFolder"));
+        renameForm.requestSubmit(appDocument.querySelector("#saveFolderName"));
 
-        setTimeout(async () => {
-          const saved = await exportCuratTestData(frame);
-          const project = saved.projects.find((item) => item.name === "新しいフォルダー名");
+        setTimeout(() => {
           const renamedRow = [...appDocument.querySelectorAll("[data-tree-folder]")]
             .find((item) => item.dataset.treeFolder === "新しいフォルダー名");
-          const savedFromPopover =
-            popover.hidden &&
-            form.parentElement === appDocument.querySelector("#folderDialog") &&
-            project?.icon === "builtin:sword" &&
-            project.aliases.includes("別名A") &&
-            project.aliases.includes("別名B") &&
-            saved.series[0].project === "新しいフォルダー名" &&
-            Boolean(renamedRow);
-          const passed = openedContextually && savedFromPopover;
+          renamedRow.dispatchEvent(new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            clientX: 220,
+            clientY: 180,
+          }));
+          appDocument.querySelector("[data-context-action='change-folder-icon']").click();
 
-          document.querySelector("#result").textContent = passed
-            ? "PASS folder edits use a contextual non-modal popover and persist changes"
-            : `FAIL opened=${openedContextually} saved=${savedFromPopover} project=${JSON.stringify(project)}`;
-          document.title = passed ? "PASS" : "FAIL";
-        }, 100);
+          setTimeout(() => {
+            const iconDialog = appDocument.querySelector("#folderIconDialog");
+            const openedIconOnly =
+              iconDialog.open &&
+              !renameDialog.open &&
+              appDocument.activeElement === appDocument.querySelector("#folderIconSearch");
+            appDocument.querySelector("[data-folder-icon='builtin:sword']").click();
+            appDocument.querySelector("#folderIconForm")
+              .requestSubmit(appDocument.querySelector("#saveFolderIcon"));
+
+            setTimeout(async () => {
+              const saved = await exportCuratTestData(frame);
+              const project = saved.projects.find((item) => item.name === "新しいフォルダー名");
+              const savedSeparately =
+                !iconDialog.open &&
+                project?.icon === "builtin:sword" &&
+                project.aliases.includes("旧別名") &&
+                project.aliases.includes("テストフォルダー") &&
+                saved.series[0].project === "新しいフォルダー名" &&
+                Boolean(renamedRow);
+
+              const currentRenamedRow = [...appDocument.querySelectorAll("[data-tree-folder]")]
+                .find((item) => item.dataset.treeFolder === "新しいフォルダー名");
+              currentRenamedRow.dispatchEvent(new MouseEvent("contextmenu", {
+                bubbles: true,
+                cancelable: true,
+                clientX: 220,
+                clientY: 180,
+              }));
+              appDocument.querySelector("[data-context-action='change-folder-icon']").click();
+              const recentPassed = Boolean(
+                appDocument.querySelector(
+                  "#recentFolderIcons [data-folder-icon='builtin:sword']",
+                ),
+              );
+              const passed =
+                openedRenameOnly && openedIconOnly && savedSeparately && recentPassed;
+
+              document.querySelector("#result").textContent = passed
+                ? "PASS folder name and icon use focused dialogs with recent emoji history"
+                : `FAIL rename=${openedRenameOnly} icon=${openedIconOnly} saved=${savedSeparately} recent=${recentPassed} project=${JSON.stringify(project)}`;
+              document.title = passed ? "PASS" : "FAIL";
+            }, 100);
+          }, 50);
+        }, 50);
       }, 50);
     }, 50);
   }, { once: true });

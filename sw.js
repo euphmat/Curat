@@ -1,4 +1,4 @@
-const CACHE_NAME = "curat-shell-v21";
+const CACHE_NAME = "curat-shell-v22";
 const APP_SHELL = [
   "./",
   "./index.html",

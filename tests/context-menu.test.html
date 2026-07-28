@@ -60,8 +60,10 @@
       appDocument.querySelector("[data-context-action='change-folder-icon']").click();
       setTimeout(() => {
         const iconFocusPassed =
+          appDocument.querySelector("#folderIconDialog").open &&
+          !appDocument.querySelector("#renameFolderDialog").open &&
           appDocument.activeElement === appDocument.querySelector("#folderIconSearch");
-        appDocument.querySelector("#folderEditorPopover .close-button").click();
+        appDocument.querySelector("#folderIconDialog .close-button").click();
 
         const playlist = appDocument.querySelector("[data-project-series='context-menu-series']");
         playlist.dispatchEvent(new MouseEvent("contextmenu", {

@@ -56,7 +56,7 @@
           Boolean(appDocument.querySelector(".topbar > #playlistForm #playlistUrl")),
         ],
         [
-          "フォルダー名を Enter キーで保存できる",
+          "新規フォルダーを Enter キーで保存できる",
           appDocument.querySelectorAll("#folderForm button[type='submit']").length === 1 &&
             appDocument.querySelector("#folderForm button[type='submit']")?.id === "saveFolder" &&
             appDocument.querySelector("#saveFolder")?.hasAttribute("data-default-action") &&
@@ -65,18 +65,30 @@
             ),
         ],
         [
-          "フォルダーアイコンを検索・選択できる",
+          "名前変更とアイコン変更が専用モーダルに分かれている",
           Boolean(
-            appDocument.querySelector("#folderIconSearch") &&
-              appDocument.querySelector("#folderIconResults") &&
-              appDocument.querySelector("#resetFolderIcon"),
+            appDocument.querySelector("#renameFolderDialog #renameFolderForm") &&
+              appDocument.querySelector("#renameFolderForm #folderNameInput") &&
+              appDocument.querySelector("#folderIconDialog #folderIconForm") &&
+              !appDocument.querySelector("#renameFolderDialog #folderIconSearch") &&
+              !appDocument.querySelector("#folderDialog #folderIconSearch")
           ),
         ],
         [
-          "新規フォルダーでは削除操作を隠して内蔵アイコンを表示する",
+          "フォルダーアイコンを検索し、最近使った絵文字を表示できる",
+          Boolean(
+            appDocument.querySelector("#folderIconSearch") &&
+              appDocument.querySelector("#folderIconResults") &&
+              appDocument.querySelector("#resetFolderIcon") &&
+              appDocument.querySelector("#recentFolderIconsSection") &&
+              appDocument.querySelector("#recentFolderIcons"),
+          ),
+        ],
+        [
+          "新規作成モーダルは作成に必要な項目だけを表示する",
           appDocument.querySelector("#folderDialog")?.open &&
-            appDocument.querySelector("#deleteFolder")?.hidden &&
-            appDocument.querySelectorAll("#folderIconResults [data-folder-icon]").length === 8,
+            Boolean(appDocument.querySelector("#newFolderNameInput")) &&
+            !appDocument.querySelector("#folderDialog .folder-icon-picker"),
         ],
         [
           "API キーを Enter キーで保存できる",
