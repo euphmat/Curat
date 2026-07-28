@@ -27,6 +27,7 @@
         return;
       }
       appDocument.querySelector("#newProject")?.click();
+      appDocument.querySelector("[data-recommendation-tab='new-game']")?.click();
       const checks = [
         ["分類モジュールを読み込める", Boolean(appWindow.CuratProjectMatch)],
         ["並び替えモジュールを読み込める", Boolean(appWindow.CuratPlaylistOrder)],
@@ -127,6 +128,14 @@
                 .querySelector("[data-recommendation-tab='new-game']")
                 ?.textContent.includes("新しいゲーム"),
           ),
+        ],
+        [
+          "おすすめタブを切り替えられる",
+          appDocument
+            .querySelector("[data-recommendation-tab='new-game']")
+            ?.getAttribute("aria-selected") === "true" &&
+            appDocument.querySelector("#recommendationResults")?.getAttribute("aria-labelledby") ===
+              "recommendationTabNewGame",
         ],
         [
           "ヘッダーのメニューボタンが廃止されている",
