@@ -53,8 +53,8 @@
           action === "edit-folder" && label.includes("フォルダー名を変更")) &&
         folderActions.some(([action, label]) =>
           action === "change-folder-icon" && label.includes("アイコンを変更")) &&
-        folderActions.some(([action]) => action === "collapse-folder") &&
-        !folderActions.some(([action]) => action === "expand-folder") &&
+        folderActions.some(([action]) => action === "expand-folder") &&
+        !folderActions.some(([action]) => action === "collapse-folder") &&
         folderActions.some(([action]) => action === "delete-folder");
 
       appDocument.querySelector("[data-context-action='change-folder-icon']").click();

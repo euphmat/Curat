@@ -173,6 +173,16 @@
             <p class="header-form-message" id="formMessage" role="status" aria-live="polite"></p>
           </form>
           <div class="topbar-actions">
+            <button
+              class="recommendations-button"
+              id="openRecommendations"
+              type="button"
+              title="登録済みプレイリストからおすすめを探す"
+              aria-label="登録済みプレイリストからおすすめを探す"
+            >
+              <svg class="icon" aria-hidden="true"><use href="#icon-sparkles"></use></svg>
+              <span>おすすめ</span>
+            </button>
             <button class="icon-button" id="syncAll" type="button" title="すべて再同期" aria-label="すべて再同期"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg></button>
             <button
               class="delete-all-button"
@@ -192,6 +202,29 @@
         </section>
       </main>
     </div>
+
+    <dialog class="sheet-dialog recommendation-dialog" id="recommendationDialog">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div>
+            <span class="recommendation-eyebrow">FOR YOUR LIBRARY</span>
+            <h2>おすすめプレイリスト</h2>
+          </div>
+          <button class="close-button" id="closeRecommendations" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
+        </div>
+        <p class="sheet-lead recommendation-lead">
+          登録済みプレイリストの作品名と投稿者だけを使って候補を探します。視聴状況は使用しません。
+        </p>
+        <div class="recommendation-toolbar">
+          <p id="recommendationStatus" role="status" aria-live="polite"></p>
+          <button class="secondary-button" id="refreshRecommendations" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>
+            <span>候補を更新</span>
+          </button>
+        </div>
+        <div class="recommendation-results" id="recommendationResults"></div>
+      </div>
+    </dialog>
 
     <dialog class="sheet-dialog settings-data-dialog" id="settingsDialog">
       <div class="sheet">
@@ -531,6 +564,7 @@
     <script src="./playlist-order.js"></script>
     <script src="./folder-order.js"></script>
     <script src="./folder-display.js"></script>
+    <script src="./recommendations.js"></script>
     <script src="./app.js" type="module"></script>
   </body>
 </html>

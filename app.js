@@ -13,6 +13,10 @@ const SIDEBAR_MAX_WIDTH = 480;
 const RECENT_IMPORT_CORRECTION_MS = 5 * 60 * 1000;
 const TOUCH_LONG_PRESS_MS = 560;
 const TOUCH_MOVE_THRESHOLD = 10;
+const RECOMMENDATION_PROJECT_SEARCH_LIMIT = 6;
+const RECOMMENDATION_CHANNEL_SEARCH_LIMIT = 6;
+const RECOMMENDATION_CANDIDATE_LIMIT = 50;
+const RECOMMENDATION_RESULT_LIMIT = 12;
 const {
   parseEpisodeOrder,
   sortPlaylistTasks,
@@ -35,6 +39,10 @@ const {
   reorderVisiblePlaylistOrder,
 } = window.CuratPlaylistOrder;
 const { compareFolderNames } = window.CuratFolderOrder;
+const {
+  buildRecommendationProfile,
+  rankRecommendationCandidates,
+} = window.CuratRecommendations;
 const {
   toUpperCamelCase,
   isColorIconName,
@@ -165,6 +173,11 @@ const elements = {
   formMessage: $("#formMessage"),
   syncAll: $("#syncAll"),
   deleteAll: $("#deleteAll"),
+  openRecommendations: $("#openRecommendations"),
+  recommendationDialog: $("#recommendationDialog"),
+  recommendationStatus: $("#recommendationStatus"),
+  recommendationResults: $("#recommendationResults"),
+  refreshRecommendations: $("#refreshRecommendations"),
   detailView: $("#detailView"),
   detailContent: $("#detailContent"),
   settingsDialog: $("#settingsDialog"),
@@ -261,6 +274,11 @@ let contextTarget = null;
 let confirmResolver = null;
 let importHighlightTimer = null;
 let recentImportCorrection = null;
+let recommendationCandidates = [];
+let recommendationLoading = false;
+let recommendationError = "";
+let recommendationLastUpdatedAt = "";
+let recommendationSourceSignature = "";
 let cloudState = {
   configured: false,
   phase: "not-configured",
@@ -601,6 +619,7 @@ function getGlobalStats() {
 
 function render() {
   elements.deleteAll.disabled = data.series.length === 0 && data.projects.length === 0;
+  elements.openRecommendations.disabled = data.series.length === 0;
   renderProjectTree();
 
   if (detailSeriesId && data.series.some((series) => series.id === detailSeriesId)) {
@@ -670,7 +689,7 @@ function renderProjectTree() {
               ]),
           )
         : seriesList;
-      const expanded = Boolean(query) || config.expandedProjects[project] !== false;
+      const expanded = Boolean(query) || config.expandedProjects[project] === true;
       const totals = seriesList.reduce(
         (result, series) => {
           const stats = getSeriesStats(series);
@@ -775,12 +794,320 @@ async function fetchJson(path, params) {
     const friendly = {
       keyInvalid: "API キーが正しくありません。設定を確認してください。",
       quotaExceeded: "YouTube API の本日の利用上限に達しました。",
+      dailyLimitExceeded: "YouTube API の本日の利用上限に達しました。",
+      rateLimitExceeded: "YouTube API へのリクエストが集中しています。少し待ってからお試しください。",
       playlistItemsNotAccessible: "このプレイリストは非公開、または取得できません。",
       forbidden: "API キーの参照元制限または API 設定を確認してください。",
     };
     throw new Error(friendly[reason] || payload.error?.message || "YouTube から情報を取得できませんでした。");
   }
   return payload;
+}
+
+function recommendationDataSignature() {
+  return data.series
+    .map((series) => series.id)
+    .filter(Boolean)
+    .sort()
+    .join("|");
+}
+
+function recommendationCandidateFromResource(resource, sourceProjectName = "") {
+  const snippet = resource?.snippet || {};
+  return {
+    id: resource?.id?.playlistId || resource?.id || "",
+    title: snippet.title || "名称未設定のプレイリスト",
+    description: snippet.description || "",
+    channelId: snippet.channelId || "",
+    channelTitle: snippet.channelTitle || "",
+    thumbnail: getThumbnail(snippet.thumbnails),
+    publishedAt: snippet.publishedAt || null,
+    itemCount: resource?.contentDetails?.itemCount ?? 0,
+    privacyStatus: resource?.status?.privacyStatus || "unknown",
+    sourceProjectNames: new Set(sourceProjectName ? [sourceProjectName] : []),
+  };
+}
+
+function mergeRecommendationCandidate(candidateMap, candidate) {
+  if (!candidate.id) return;
+  const existing = candidateMap.get(candidate.id);
+  if (!existing) {
+    candidateMap.set(candidate.id, candidate);
+    return;
+  }
+  for (const projectName of candidate.sourceProjectNames || []) {
+    existing.sourceProjectNames.add(projectName);
+  }
+  for (const key of [
+    "title",
+    "description",
+    "channelId",
+    "channelTitle",
+    "thumbnail",
+    "publishedAt",
+    "itemCount",
+    "privacyStatus",
+  ]) {
+    if (candidate[key] !== undefined && candidate[key] !== "" && candidate[key] !== 0) {
+      existing[key] = candidate[key];
+    }
+  }
+}
+
+async function fetchPlaylistResources(playlistIds) {
+  const ids = [...new Set(playlistIds.filter(Boolean))];
+  const requests = [];
+  for (let index = 0; index < ids.length; index += 50) {
+    requests.push(
+      fetchJson("playlists", {
+        part: "snippet,contentDetails,status",
+        id: ids.slice(index, index + 50).join(","),
+        maxResults: 50,
+      }),
+    );
+  }
+  const responses = await Promise.all(requests);
+  return responses.flatMap((response) => response.items || []);
+}
+
+async function hydrateRegisteredPlaylistChannels() {
+  const resources = await fetchPlaylistResources(data.series.map((series) => series.id));
+  const byId = new Map(resources.map((resource) => [resource.id, resource]));
+  let changed = false;
+  for (const series of data.series) {
+    const snippet = byId.get(series.id)?.snippet;
+    if (!snippet) continue;
+    if (snippet.channelId && series.channelId !== snippet.channelId) {
+      series.channelId = snippet.channelId;
+      changed = true;
+    }
+    if (!series.channelTitle && snippet.channelTitle) {
+      series.channelTitle = snippet.channelTitle;
+      changed = true;
+    }
+  }
+  if (changed) saveData();
+}
+
+function renderRecommendationResults() {
+  elements.refreshRecommendations.disabled = recommendationLoading;
+  elements.recommendationDialog.classList.toggle("is-loading", recommendationLoading);
+
+  if (recommendationLoading) {
+    elements.recommendationStatus.textContent = "YouTube から候補を探しています…";
+    elements.recommendationResults.innerHTML = `
+      <div class="recommendation-loading" aria-hidden="true">
+        ${Array.from({ length: 4 }, () => '<span class="recommendation-skeleton"></span>').join("")}
+      </div>
+    `;
+    return;
+  }
+
+  if (recommendationError) {
+    elements.recommendationStatus.textContent = recommendationError;
+    elements.recommendationResults.innerHTML = `
+      <div class="recommendation-empty is-error">
+        ${icon("alert")}
+        <strong>候補を取得できませんでした</strong>
+        <span>API キーと利用上限を確認して、もう一度お試しください。</span>
+      </div>
+    `;
+    return;
+  }
+
+  if (!recommendationLastUpdatedAt) {
+    elements.recommendationStatus.textContent = "候補を更新すると、登録済みデータからおすすめを探します。";
+    elements.recommendationResults.innerHTML = `
+      <div class="recommendation-empty">
+        ${icon("sparkles")}
+        <strong>まだ候補を取得していません</strong>
+        <span>視聴状態は使わず、登録内容だけで検索します。</span>
+      </div>
+    `;
+    return;
+  }
+
+  elements.recommendationStatus.textContent = recommendationCandidates.length
+    ? `${recommendationCandidates.length} 件の候補 · ${formatDate(recommendationLastUpdatedAt)} 更新`
+    : `${formatDate(recommendationLastUpdatedAt)} 更新`;
+  if (!recommendationCandidates.length) {
+    elements.recommendationResults.innerHTML = `
+      <div class="recommendation-empty">
+        ${icon("search")}
+        <strong>新しい候補が見つかりませんでした</strong>
+        <span>登録する作品や実況者を増やしてから、もう一度更新してください。</span>
+      </div>
+    `;
+    return;
+  }
+
+  elements.recommendationResults.innerHTML = recommendationCandidates
+    .map(
+      (candidate) => `
+        <article class="recommendation-card" data-recommendation-id="${escapeHtml(candidate.id)}">
+          <a
+            class="recommendation-thumbnail"
+            href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="「${escapeHtml(candidate.title)}」を YouTube で開く"
+          >
+            <img src="${escapeHtml(candidate.thumbnail || "./favicon.svg")}" alt="" loading="lazy" />
+            <span>${Number(candidate.itemCount) || "?"} 本</span>
+          </a>
+          <div class="recommendation-copy">
+            <h3>${escapeHtml(candidate.title)}</h3>
+            <p class="recommendation-channel">${escapeHtml(candidate.channelTitle || "投稿者名未取得")}</p>
+            <div class="recommendation-reasons">
+              ${(candidate.reasons || [])
+                .map((reason) => `<span>${icon("sparkles")}${escapeHtml(reason)}</span>`)
+                .join("")}
+            </div>
+          </div>
+          <div class="recommendation-actions">
+            <a
+              class="recommendation-youtube-link"
+              href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="YouTube で確認"
+              title="YouTube で確認"
+            >${icon("external-link")}</a>
+            <button
+              class="recommendation-add-button"
+              type="button"
+              data-recommendation-action="add"
+              data-playlist-id="${escapeHtml(candidate.id)}"
+            >${icon("plus")}<span>追加</span></button>
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+async function loadRecommendations() {
+  if (recommendationLoading) return;
+  if (!data.series.length) {
+    showToast("先にプレイリストを追加してください", true);
+    return;
+  }
+  if (!config.apiKey) {
+    openSettingsDialog();
+    showToast("おすすめの取得には YouTube API キーが必要です", true);
+    return;
+  }
+
+  recommendationLoading = true;
+  recommendationError = "";
+  renderRecommendationResults();
+  try {
+    await hydrateRegisteredPlaylistChannels();
+    const profile = buildRecommendationProfile(data.series, data.projects);
+    const candidateMap = new Map();
+    const requests = [];
+
+    for (const channel of profile.channels
+      .filter((item) => item.id)
+      .slice(0, RECOMMENDATION_CHANNEL_SEARCH_LIMIT)) {
+      requests.push({
+        kind: "channel",
+        promise: fetchJson("playlists", {
+          part: "snippet,contentDetails,status",
+          channelId: channel.id,
+          maxResults: 25,
+        }),
+      });
+    }
+
+    for (const projectName of profile.searchTerms.slice(0, RECOMMENDATION_PROJECT_SEARCH_LIMIT)) {
+      requests.push({
+        kind: "project",
+        projectName,
+        promise: fetchJson("search", {
+          part: "snippet",
+          type: "playlist",
+          q: `${projectName} 実況`,
+          order: "relevance",
+          maxResults: 12,
+          regionCode: "JP",
+          relevanceLanguage: "ja",
+          safeSearch: "moderate",
+        }),
+      });
+    }
+
+    const settled = await Promise.allSettled(requests.map((request) => request.promise));
+    const failures = [];
+    settled.forEach((result, index) => {
+      const request = requests[index];
+      if (result.status === "rejected") {
+        failures.push(result.reason);
+        return;
+      }
+      for (const resource of result.value.items || []) {
+        mergeRecommendationCandidate(
+          candidateMap,
+          recommendationCandidateFromResource(
+            resource,
+            request.kind === "project" ? request.projectName : "",
+          ),
+        );
+      }
+    });
+
+    if (!candidateMap.size && failures.length) throw failures[0];
+
+    const candidateIds = [...candidateMap.keys()]
+      .filter((id) => !profile.registeredIds.has(id))
+      .slice(0, RECOMMENDATION_CANDIDATE_LIMIT);
+    if (candidateIds.length) {
+      const details = await fetchPlaylistResources(candidateIds);
+      for (const resource of details) {
+        mergeRecommendationCandidate(
+          candidateMap,
+          recommendationCandidateFromResource(resource),
+        );
+      }
+    }
+
+    recommendationCandidates = rankRecommendationCandidates(
+      [...candidateMap.values()].filter(
+        (candidate) =>
+          candidate.privacyStatus !== "private" &&
+          candidate.privacyStatus !== "unlisted",
+      ),
+      profile,
+      RECOMMENDATION_RESULT_LIMIT,
+    );
+    recommendationLastUpdatedAt = new Date().toISOString();
+    recommendationSourceSignature = recommendationDataSignature();
+  } catch (error) {
+    recommendationError = error.message || "おすすめを取得できませんでした。";
+  } finally {
+    recommendationLoading = false;
+    renderRecommendationResults();
+  }
+}
+
+function openRecommendationDialog() {
+  if (!data.series.length) {
+    showToast("先にプレイリストを追加してください", true);
+    return;
+  }
+  if (!config.apiKey) {
+    openSettingsDialog();
+    showToast("おすすめの取得には YouTube API キーが必要です", true);
+    return;
+  }
+  if (!elements.recommendationDialog.open) elements.recommendationDialog.showModal();
+  renderRecommendationResults();
+  if (
+    !recommendationLastUpdatedAt ||
+    recommendationSourceSignature !== recommendationDataSignature()
+  ) {
+    loadRecommendations();
+  }
 }
 
 async function fetchPlaylist(playlistId) {
@@ -874,6 +1201,7 @@ function mergePlaylistResult(playlistId, result) {
     id: playlistId,
     title: snippet.title || existing?.title || "名称未設定のプレイリスト",
     description: snippet.description || "",
+    channelId: snippet.channelId || existing?.channelId || "",
     channelTitle: snippet.channelTitle || "",
     project: placement.projectName,
     thumbnail: getThumbnail(snippet.thumbnails) || freshTasks.find((task) => task.thumbnail)?.thumbnail || "",
@@ -1669,7 +1997,7 @@ function saveRenamedFolder() {
     icon: normalizeFolderIcon(oldRule?.icon),
   });
   config.expandedProjects ||= {};
-  config.expandedProjects[name] = config.expandedProjects[originalName] !== false;
+  config.expandedProjects[name] = config.expandedProjects[originalName] === true;
   if (originalName !== name) delete config.expandedProjects[originalName];
 
   saveData();
@@ -1817,7 +2145,7 @@ function contextMenuItems(kind, id) {
     };
   }
   if (kind === "folder") {
-    const expanded = config.expandedProjects?.[id] !== false;
+    const expanded = config.expandedProjects?.[id] === true;
     return {
       label: displayFolderName(id),
       items: [
@@ -2772,6 +3100,42 @@ elements.detailContent.addEventListener("keydown", (event) => {
 
 elements.syncAll.addEventListener("click", syncAllSeries);
 elements.deleteAll.addEventListener("click", deleteAllPlaylistsAndFolders);
+elements.openRecommendations.addEventListener("click", openRecommendationDialog);
+elements.refreshRecommendations.addEventListener("click", loadRecommendations);
+$("#closeRecommendations").addEventListener("click", () =>
+  elements.recommendationDialog.close(),
+);
+elements.recommendationDialog.addEventListener("click", (event) => {
+  if (event.target === elements.recommendationDialog) {
+    elements.recommendationDialog.close();
+  }
+});
+elements.recommendationResults.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-recommendation-action='add']");
+  if (!button || button.disabled) return;
+  const playlistId = button.dataset.playlistId;
+  if (!playlistId) return;
+  button.disabled = true;
+  const label = $("span", button);
+  if (label) label.textContent = "追加中…";
+  try {
+    await importPlaylist(`https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`);
+    recommendationCandidates = recommendationCandidates.filter(
+      (candidate) => candidate.id !== playlistId,
+    );
+    recommendationSourceSignature = recommendationDataSignature();
+    elements.recommendationDialog.close();
+  } catch (error) {
+    recommendationError = error.message;
+    renderRecommendationResults();
+  } finally {
+    setFormLoading(false);
+    if (button.isConnected) {
+      button.disabled = false;
+      if (label) label.textContent = "追加";
+    }
+  }
+});
 
 $("#openSettings").addEventListener("click", () => {
   openSettingsDialog();
@@ -3365,6 +3729,8 @@ if ("serviceWorker" in navigator) {
 }
 
 async function startApp() {
+  // Paint the app shell immediately while IndexedDB restores the saved library.
+  render();
   try {
     const savedData = await dataStore.load();
     if (savedData && Array.isArray(savedData.series)) {

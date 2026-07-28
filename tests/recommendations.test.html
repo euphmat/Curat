@@ -1,0 +1,84 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>recommendations tests</title>
+<pre id="result">running</pre>
+<script src="../recommendations.js"></script>
+<script>
+  const {
+    buildRecommendationProfile,
+    rankRecommendationCandidates,
+  } = window.CuratRecommendations;
+  const failures = [];
+  let assertions = 0;
+
+  function equal(actual, expected, message) {
+    assertions += 1;
+    if (actual !== expected) {
+      failures.push(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+  }
+
+  const baseSeries = [
+    {
+      id: "registered",
+      project: "ゼルダの伝説",
+      title: "ゼルダの伝説 実況",
+      channelId: "channel-a",
+      channelTitle: "実況者A",
+      tasks: [{ status: "todo" }],
+    },
+  ];
+  const projects = [
+    { name: "ゼルダの伝説", aliases: ["The Legend of Zelda"], learnedAliases: [] },
+  ];
+  const candidates = [
+    {
+      id: "registered",
+      title: "登録済み",
+      channelId: "channel-a",
+      channelTitle: "実況者A",
+      itemCount: 20,
+    },
+    {
+      id: "same-channel",
+      title: "新作ゲーム 実況プレイ",
+      channelId: "channel-a",
+      channelTitle: "実況者A",
+      itemCount: 30,
+    },
+    {
+      id: "same-project",
+      title: "The Legend of Zelda 完全実況",
+      channelId: "channel-b",
+      channelTitle: "実況者B",
+      itemCount: 40,
+    },
+  ];
+
+  const todoProfile = buildRecommendationProfile(baseSeries, projects);
+  const todoRanked = rankRecommendationCandidates(candidates, todoProfile);
+  equal(todoRanked.some((item) => item.id === "registered"), false, "登録済み候補を除外する");
+  equal(todoRanked[0].id, "same-channel", "同じ投稿者の候補を優先する");
+  equal(
+    todoRanked.find((item) => item.id === "same-project").reasons[0],
+    "登録済みの「ゼルダの伝説」に関連",
+    "作品との関連理由を表示する",
+  );
+
+  const doneSeries = structuredClone(baseSeries);
+  doneSeries[0].tasks[0].status = "done";
+  const doneRanked = rankRecommendationCandidates(
+    candidates,
+    buildRecommendationProfile(doneSeries, projects),
+  );
+  equal(
+    JSON.stringify(doneRanked),
+    JSON.stringify(todoRanked),
+    "視聴状況が変わってもおすすめ結果を変えない",
+  );
+
+  document.querySelector("#result").textContent = failures.length
+    ? `FAIL ${failures.join("\n")}`
+    : `PASS ${assertions}/${assertions}`;
+  document.title = failures.length ? "FAIL" : "PASS";
+</script>

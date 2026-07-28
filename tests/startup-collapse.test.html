@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script src="backup-test-helper.js"></script>
+<script>
+  const now = "2026-07-27T00:00:00.000Z";
+  const series = ["a", "b"].map((id, index) => ({
+    id,
+    title: `プレイリスト ${id.toUpperCase()}`,
+    channelTitle: `チャンネル ${id.toUpperCase()}`,
+    project: `フォルダー ${index + 1}`,
+    thumbnail: "",
+    tasks: [],
+    createdAt: now,
+    updatedAt: now,
+  }));
+  const testData = {
+    version: 1,
+    updatedAt: now,
+    series,
+    projects: series.map((item) => ({
+      name: item.project,
+      aliases: [],
+      learnedAliases: [],
+    })),
+    playlistOrder: ["a", "b"],
+  };
+
+  const frame = document.querySelector("iframe");
+  frame.addEventListener("load", async () => {
+    await loadCuratTestData(frame, testData);
+    setTimeout(() => {
+      const appDocument = frame.contentDocument;
+      const folders = [...appDocument.querySelectorAll(".project-group")];
+      const passed =
+        folders.length === 2 &&
+        folders.every((folder) => !folder.classList.contains("is-expanded")) &&
+        folders.every(
+          (folder) =>
+            folder.querySelector("[data-tree-folder]")?.getAttribute("aria-expanded") === "false",
+        ) &&
+        folders.every((folder) => folder.querySelector(".project-playlists")?.hidden);
+
+      document.querySelector("#result").textContent = passed
+        ? "PASS all playlists are collapsed on startup"
+        : `FAIL folders=${folders.length} expanded=${folders.filter((folder) => folder.classList.contains("is-expanded")).length}`;
+      document.title = passed ? "PASS" : "FAIL";
+    }, 50);
+  }, { once: true });
+  frame.src = "../index.html";
+</script>
