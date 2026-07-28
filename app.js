@@ -22,6 +22,7 @@ const RECOMMENDATION_DISCOVERY_SEARCH_TERMS = [
 const RECOMMENDATION_DISCOVERY_CANDIDATE_LIMIT = 100;
 const RECOMMENDATION_CANDIDATE_LIMIT = 250;
 const RECOMMENDATION_RESULT_LIMIT_PER_TYPE = 8;
+const SAME_GAME_SEARCH_RESULT_LIMIT = 24;
 const {
   parseEpisodeOrder,
   sortPlaylistTasks,
@@ -47,11 +48,14 @@ const { compareFolderNames } = window.CuratFolderOrder;
 const {
   RECOMMENDATION_TYPES,
   buildRecommendationProfile,
+  diversifyRecommendationChannels,
+  isRecommendationChannelRegistered,
   isRecommendationDismissed,
   recommendationChannelKey,
   recommendationGameKey,
   recommendationPlaylistKey,
   recommendationType,
+  rankRecommendationCandidates,
   rankRecommendationCandidatesByType,
 } = window.CuratRecommendations;
 const {
@@ -206,6 +210,12 @@ const elements = {
   blockedRecommendationStatus: $("#blockedRecommendationStatus"),
   blockedRecommendationResults: $("#blockedRecommendationResults"),
   clearBlockedRecommendations: $("#clearBlockedRecommendations"),
+  sameGameSearchDialog: $("#sameGameSearchDialog"),
+  sameGameSearchTitle: $("#sameGameSearchTitle"),
+  sameGameSearchLead: $("#sameGameSearchLead"),
+  sameGameSearchStatus: $("#sameGameSearchStatus"),
+  sameGameSearchResults: $("#sameGameSearchResults"),
+  sameGameSearchRefresh: $("#sameGameSearchRefresh"),
   detailView: $("#detailView"),
   detailContent: $("#detailContent"),
   settingsDialog: $("#settingsDialog"),
@@ -326,6 +336,11 @@ let recommendationLastUpdatedAt = "";
 let recommendationSourceSignature = "";
 let activeRecommendationTab = "new-channel";
 let activeBlockedRecommendationType = "playlists";
+let sameGameSearchSeriesId = "";
+let sameGameSearchProjectName = "";
+let sameGameSearchCandidates = [];
+let sameGameSearchLoading = false;
+let sameGameSearchError = "";
 let cloudState = {
   configured: false,
   phase: "not-configured",
@@ -361,6 +376,13 @@ const cloudSync = new CloudSync({
       if (elements.recommendationDialog.open) renderRecommendationResults();
       if (elements.blockedRecommendationDialog.open) {
         renderBlockedRecommendations();
+      }
+      if (elements.sameGameSearchDialog.open) {
+        sameGameSearchCandidates = sameGameSearchCandidates.filter(
+          (candidate) =>
+            !isRecommendationChannelRegistered(candidate, data.series),
+        );
+        renderSameGameSearchResults();
       }
       if (openSeriesId && data.series.some((series) => series.id === openSeriesId)) {
         openSeries(openSeriesId);
@@ -1279,6 +1301,269 @@ function unblockRecommendation(kind, key) {
   saveData();
   renderBlockedRecommendations();
   return true;
+}
+
+function sameGameSearchCardHtml(candidate) {
+  return `
+    <article class="same-game-search-card" data-same-game-candidate="${escapeHtml(candidate.id)}">
+      <a
+        class="same-game-search-thumbnail"
+        href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
+        target="_blank"
+        rel="noreferrer"
+        aria-label="「${escapeHtml(candidate.title)}」を YouTube で開く"
+      >
+        <img src="${escapeHtml(candidate.thumbnail || "./favicon.svg")}" alt="" loading="lazy" />
+        <span>${Number(candidate.itemCount) || "?"} 本</span>
+      </a>
+      <div class="same-game-search-copy">
+        <h3>${escapeHtml(candidate.title)}</h3>
+        <p>
+          <span>${escapeHtml(candidate.channelTitle || "投稿者名未取得")}</span>
+          <b>未追加の投稿者</b>
+        </p>
+        <div class="same-game-search-reasons">
+          ${(candidate.reasons || [])
+            .map((reason) => `<span>${icon("sparkles")}${escapeHtml(reason)}</span>`)
+            .join("")}
+        </div>
+      </div>
+      <div class="same-game-search-actions">
+        <a
+          class="same-game-search-youtube"
+          href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="YouTube で確認"
+          title="YouTube で確認"
+        >${icon("external-link")}</a>
+        <button
+          class="same-game-search-add"
+          type="button"
+          data-same-game-action="add"
+          data-playlist-id="${escapeHtml(candidate.id)}"
+        >${icon("plus")}<span>追加</span></button>
+      </div>
+    </article>
+  `;
+}
+
+function renderSameGameSearchResults() {
+  elements.sameGameSearchRefresh.disabled = sameGameSearchLoading;
+  elements.sameGameSearchDialog.classList.toggle(
+    "is-loading",
+    sameGameSearchLoading,
+  );
+  if (sameGameSearchLoading) {
+    elements.sameGameSearchStatus.textContent =
+      "YouTube から別の投稿者を探しています…";
+    elements.sameGameSearchResults.innerHTML = `
+      <div class="same-game-search-loading" aria-hidden="true">
+        ${Array.from(
+          { length: 6 },
+          () => '<span class="same-game-search-skeleton"></span>',
+        ).join("")}
+      </div>
+    `;
+    return;
+  }
+  if (sameGameSearchError) {
+    elements.sameGameSearchStatus.textContent = sameGameSearchError;
+    elements.sameGameSearchResults.innerHTML = `
+      <div class="same-game-search-empty is-error">
+        ${icon("alert")}
+        <strong>検索できませんでした</strong>
+        <span>API キーと利用上限を確認して、もう一度お試しください。</span>
+      </div>
+    `;
+    return;
+  }
+  elements.sameGameSearchStatus.textContent = sameGameSearchCandidates.length
+    ? `追加済みの投稿者を除外 · ${sameGameSearchCandidates.length} 件`
+    : "追加済みの投稿者を除外して検索しました";
+  elements.sameGameSearchResults.innerHTML = sameGameSearchCandidates.length
+    ? `<div class="same-game-search-list">${sameGameSearchCandidates
+        .map(sameGameSearchCardHtml)
+        .join("")}</div>`
+    : `
+      <div class="same-game-search-empty">
+        ${icon("search")}
+        <strong>別の投稿者によるプレイリストが見つかりませんでした</strong>
+        <span>ゲーム名や別名をフォルダー設定へ追加すると、検索しやすくなります。</span>
+      </div>
+    `;
+}
+
+function sameGameSearchTerms(projectName) {
+  const rule = projectRuleByName(projectName);
+  return uniqueRecommendationSearchTerms([
+    projectName,
+    ...(rule?.aliases || []),
+    ...(rule?.learnedAliases || []),
+  ]).slice(0, 3);
+}
+
+function uniqueRecommendationSearchTerms(values) {
+  const seen = new Set();
+  return values
+    .map((value) => String(value || "").trim())
+    .filter((value) => {
+      const normalized = normalizeProjectMatch(value);
+      if (!normalized || seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+async function loadSameGameSearch() {
+  if (sameGameSearchLoading || !sameGameSearchSeriesId) return;
+  const sourceSeries = data.series.find(
+    (series) => series.id === sameGameSearchSeriesId,
+  );
+  if (!sourceSeries) {
+    elements.sameGameSearchDialog.close();
+    showToast("検索元のプレイリストが見つかりません", true);
+    return;
+  }
+  sameGameSearchLoading = true;
+  sameGameSearchError = "";
+  renderSameGameSearchResults();
+  try {
+    await hydrateRegisteredPlaylistChannels();
+    const projectName =
+      (sourceSeries.project || sourceSeries.title || "").trim();
+    const relatedSeries = data.series.filter(
+      (series) =>
+        (series.project || series.title || "").trim() === projectName,
+    );
+    const rule = projectRuleByName(projectName) || {
+      name: projectName,
+      aliases: [],
+      learnedAliases: [],
+    };
+    const profile = buildRecommendationProfile(relatedSeries, [rule]);
+    profile.registeredIds = new Set(
+      data.series.map((series) => String(series.id || "")).filter(Boolean),
+    );
+    const settledSearches = await Promise.allSettled(
+      sameGameSearchTerms(projectName).map((term) =>
+        fetchJson("search", {
+          part: "snippet",
+          type: "playlist",
+          q: `${term} 実況`,
+          order: "relevance",
+          maxResults: 50,
+          regionCode: "JP",
+          relevanceLanguage: "ja",
+          safeSearch: "moderate",
+        }),
+      ),
+    );
+    const searches = settledSearches
+      .filter((result) => result.status === "fulfilled")
+      .map((result) => result.value);
+    if (!searches.length) {
+      throw settledSearches.find(
+        (result) => result.status === "rejected",
+      )?.reason || new Error("YouTube から検索結果を取得できませんでした。");
+    }
+    const candidateMap = new Map();
+    for (const response of searches) {
+      for (const resource of response.items || []) {
+        mergeRecommendationCandidate(
+          candidateMap,
+          recommendationCandidateFromResource(
+            resource,
+            projectName,
+            "same-game",
+          ),
+        );
+      }
+    }
+    const candidateIds = [...candidateMap.keys()]
+      .filter((id) => !profile.registeredIds.has(id))
+      .slice(0, RECOMMENDATION_CANDIDATE_LIMIT);
+    for (const resource of await fetchPlaylistResources(candidateIds)) {
+      mergeRecommendationCandidate(
+        candidateMap,
+        recommendationCandidateFromResource(resource),
+      );
+    }
+    sameGameSearchCandidates = diversifyRecommendationChannels(
+      rankRecommendationCandidates(
+        [...candidateMap.values()].filter(
+          (candidate) =>
+            candidate.privacyStatus !== "private" &&
+            candidate.privacyStatus !== "unlisted" &&
+            Number(candidate.itemCount) >= 2 &&
+            !isRecommendationChannelRegistered(candidate, data.series) &&
+            !isRecommendationDismissed(
+              candidate,
+              data.recommendationDismissals,
+            ),
+        ),
+        profile,
+        Number.MAX_SAFE_INTEGER,
+        data.recommendationDismissals,
+      ).filter(
+        (candidate) => recommendationType(candidate) === "new-channel",
+      ),
+    ).slice(0, SAME_GAME_SEARCH_RESULT_LIMIT);
+  } catch (error) {
+    sameGameSearchCandidates = [];
+    sameGameSearchError =
+      error.message || "同じゲームのプレイリストを検索できませんでした。";
+  } finally {
+    sameGameSearchLoading = false;
+    renderSameGameSearchResults();
+  }
+}
+
+function openSameGameSearchDialog(seriesId) {
+  const series = data.series.find((item) => item.id === seriesId);
+  if (!series) {
+    showToast("検索元のプレイリストが見つかりません", true);
+    return;
+  }
+  if (!config.apiKey) {
+    openSettingsDialog();
+    showToast("検索には YouTube API キーが必要です", true);
+    return;
+  }
+  sameGameSearchSeriesId = series.id;
+  sameGameSearchProjectName = (
+    series.project ||
+    series.title ||
+    "名称未設定"
+  ).trim();
+  sameGameSearchCandidates = [];
+  sameGameSearchError = "";
+  elements.sameGameSearchTitle.textContent = "別の投稿者を検索";
+  elements.sameGameSearchLead.textContent =
+    `「${sameGameSearchProjectName}」を、現在追加済みの投稿者を除外して検索します。`;
+  if (!elements.sameGameSearchDialog.open) {
+    elements.sameGameSearchDialog.showModal();
+  }
+  loadSameGameSearch();
+}
+
+function placeSeriesInSameGameProject(series) {
+  const targetProject = sameGameSearchProjectName;
+  const currentProject = (series.project || series.title || "").trim();
+  if (!targetProject || currentProject === targetProject) return;
+  series.project = targetProject;
+  series.updatedAt = new Date().toISOString();
+  learnPlaylistTitle(targetProject, series.title);
+  removeProjectIfEmpty(currentProject);
+  if (
+    recentImportCorrection?.seriesId === series.id
+  ) {
+    recentImportCorrection.sourceProject = targetProject;
+  }
+  config.expandedProjects ||= {};
+  config.expandedProjects[targetProject] = true;
+  saveData();
+  render();
 }
 
 function recommendationCandidatesByType(type) {
@@ -2630,6 +2915,8 @@ function contextMenuItems(kind, id) {
         ["group", "再生"],
         ["open-playlist", "panel", "詳細を開く", "Enter"],
         ["watch-playlist", "play", "続きを見る", ""],
+        ["group", "検索"],
+        ["search-same-game", "user-plus", "別の投稿者で同じゲームを検索…", ""],
         ["group", "整理"],
         ["move-playlist", "move", "プレイリストを移動…", "F2"],
         ["group", "管理"],
@@ -2715,6 +3002,9 @@ async function runTreeContextAction(action) {
   if (action === "delete-folder") await deleteFolder(target.id);
   if (action === "open-playlist") openSeries(target.id);
   if (action === "watch-playlist") continueSeries(target.id);
+  if (action === "search-same-game") {
+    openSameGameSearchDialog(target.id);
+  }
   if (action === "move-playlist") openProjectDialog(target.id);
   if (action === "delete-playlist") await deleteSeries(target.id);
   if (action === "sync-playlist") {
@@ -3722,6 +4012,49 @@ elements.clearBlockedRecommendations.addEventListener("click", async (event) => 
   saveData();
   renderBlockedRecommendations();
   showToast(`${type.label}のブロックをすべて解除しました`);
+});
+$("#closeSameGameSearch").addEventListener("click", () =>
+  elements.sameGameSearchDialog.close(),
+);
+elements.sameGameSearchDialog.addEventListener("click", (event) => {
+  if (event.target === elements.sameGameSearchDialog) {
+    elements.sameGameSearchDialog.close();
+  }
+});
+elements.sameGameSearchRefresh.addEventListener("click", loadSameGameSearch);
+elements.sameGameSearchResults.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-same-game-action='add']");
+  if (!button || button.disabled) return;
+  const playlistId = button.dataset.playlistId;
+  const candidate = sameGameSearchCandidates.find(
+    (item) => item.id === playlistId,
+  );
+  if (!candidate) return;
+  button.disabled = true;
+  const label = $("span", button);
+  if (label) label.textContent = "追加中…";
+  try {
+    const importedSeries = await importPlaylist(
+      `https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`,
+      { quiet: true },
+    );
+    placeSeriesInSameGameProject(importedSeries);
+    sameGameSearchCandidates = sameGameSearchCandidates.filter(
+      (item) =>
+        !isRecommendationChannelRegistered(item, data.series),
+    );
+    renderSameGameSearchResults();
+    showToast(
+      `「${candidate.channelTitle || candidate.title}」を「${sameGameSearchProjectName}」へ追加しました`,
+    );
+  } catch (error) {
+    showToast(error.message || "プレイリストを追加できませんでした", true);
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      if (label) label.textContent = "追加";
+    }
+  }
 });
 elements.recommendationResults.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-recommendation-action]");

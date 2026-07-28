@@ -168,6 +168,16 @@
           ),
         ],
         [
+          "同じゲームを別の投稿者から検索する画面を利用できる",
+          Boolean(
+            appDocument.querySelector(
+              "#sameGameSearchDialog #sameGameSearchResults",
+            ) &&
+              appDocument.querySelector("#sameGameSearchStatus") &&
+              appDocument.querySelector("#sameGameSearchRefresh"),
+          ),
+        ],
+        [
           "おすすめタブを切り替えられる",
           appDocument
             .querySelector("[data-recommendation-tab='new-game']")

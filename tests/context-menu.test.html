@@ -77,7 +77,10 @@
         const playlistSections = [...appDocument.querySelectorAll(".context-menu-section-label")]
           .map((item) => item.textContent.trim());
         const playlistMenuPassed =
-          playlistSections.join(",") === "再生,整理,管理" &&
+          playlistSections.join(",") === "再生,検索,整理,管理" &&
+          playlistActions.some(([action, label]) =>
+            action === "search-same-game" &&
+            label.includes("別の投稿者で同じゲームを検索")) &&
           playlistActions.some(([action, label]) =>
             action === "move-playlist" && label.includes("プレイリストを移動")) &&
           playlistActions.some(([action]) => action === "delete-playlist");

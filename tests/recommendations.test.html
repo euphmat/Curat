@@ -7,6 +7,8 @@
   const {
     RECOMMENDATION_TYPES,
     buildRecommendationProfile,
+    diversifyRecommendationChannels,
+    isRecommendationChannelRegistered,
     recommendationChannelKey,
     recommendationGameKey,
     recommendationPlaylistKey,
@@ -101,6 +103,30 @@
     ),
     "id:channel-a",
     "チャンネルIDを除外用の識別子にする",
+  );
+  equal(
+    isRecommendationChannelRegistered(
+      { channelId: "channel-a", channelTitle: "別表記" },
+      baseSeries,
+    ),
+    true,
+    "チャンネルIDが登録済みなら投稿者を除外できる",
+  );
+  equal(
+    isRecommendationChannelRegistered(
+      { channelTitle: "実況者Ａ" },
+      [{ channelTitle: "実況者A" }],
+    ),
+    true,
+    "IDがない場合は正規化した投稿者名で除外できる",
+  );
+  equal(
+    isRecommendationChannelRegistered(
+      { channelId: "new-channel", channelTitle: "新しい実況者" },
+      baseSeries,
+    ),
+    false,
+    "未登録の投稿者は検索候補に残す",
   );
   equal(
     recommendationVideoKey(
@@ -314,6 +340,19 @@
     singleGameRanked.length,
     3,
     "別ゲームの候補がない場合は同じゲームでも表示枠を埋める",
+  );
+  const channelDiversified = diversifyRecommendationChannels([
+    ...Array.from({ length: 4 }, (_, index) => ({
+      id: `channel-a-playlist-${index}`,
+      channelId: "channel-a",
+    })),
+    { id: "channel-b-playlist", channelId: "channel-b" },
+    { id: "channel-c-playlist", channelId: "channel-c" },
+  ]);
+  equal(
+    new Set(channelDiversified.slice(0, 3).map((item) => item.channelId)).size,
+    3,
+    "同じ投稿者の候補が多くても別の投稿者を先に表示する",
   );
 
   const dismissedGameKey = recommendationGameKey(

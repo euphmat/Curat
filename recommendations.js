@@ -148,6 +148,24 @@
     return channelTitle ? `title:${channelTitle}` : "";
   }
 
+  function isRecommendationChannelRegistered(candidate, seriesList = []) {
+    const candidateChannelId = String(candidate?.channelId || "").trim();
+    const candidateChannelTitle = normalizeRecommendationText(
+      candidate?.channelTitle,
+    );
+    return (Array.isArray(seriesList) ? seriesList : []).some((series) => {
+      const registeredChannelId = String(series?.channelId || "").trim();
+      if (candidateChannelId && registeredChannelId) {
+        return candidateChannelId === registeredChannelId;
+      }
+      return Boolean(
+        candidateChannelTitle &&
+          candidateChannelTitle ===
+            normalizeRecommendationText(series?.channelTitle),
+      );
+    });
+  }
+
   function recommendationPlaylistKey(candidate) {
     const playlistId = String(candidate?.id || "").trim();
     return playlistId ? `id:${playlistId}` : "";
@@ -258,6 +276,26 @@
     return diversified;
   }
 
+  function diversifyRecommendationChannels(candidates) {
+    const groups = new Map();
+    for (const candidate of candidates) {
+      const channelKey =
+        candidate.channelKey || recommendationChannelKey(candidate);
+      const key = channelKey || `playlist:${candidate.id}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(candidate);
+    }
+    const diversified = [];
+    const queues = [...groups.values()];
+    while (queues.some((queue) => queue.length)) {
+      for (const queue of queues) {
+        const candidate = queue.shift();
+        if (candidate) diversified.push(candidate);
+      }
+    }
+    return diversified;
+  }
+
   function rankRecommendationCandidates(
     candidates,
     profile,
@@ -353,10 +391,12 @@
     recommendationType,
     recommendationGameKey,
     recommendationChannelKey,
+    isRecommendationChannelRegistered,
     recommendationPlaylistKey,
     recommendationVideoKey,
     isRecommendationDismissed,
     scoreRecommendationCandidate,
+    diversifyRecommendationChannels,
     rankRecommendationCandidates,
     rankRecommendationCandidatesByType,
   };
