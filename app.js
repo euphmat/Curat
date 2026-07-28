@@ -642,8 +642,6 @@ function renderProjectTree() {
     groups.get(project).push(series);
   }
 
-  $("#projectCount").textContent = groups.size;
-  $("#playlistTreeCount").textContent = data.series.length;
   if (!groups.size) {
     elements.projectTree.innerHTML =
       '<p class="project-empty">フォルダーがありません。<br />上の「＋」から最初のフォルダーを作れます。</p>';
@@ -690,16 +688,6 @@ function renderProjectTree() {
           )
         : seriesList;
       const expanded = Boolean(query) || config.expandedProjects[project] === true;
-      const totals = seriesList.reduce(
-        (result, series) => {
-          const stats = getSeriesStats(series);
-          result.done += stats.done;
-          result.total += stats.total;
-          return result;
-        },
-        { done: 0, total: 0 },
-      );
-      const progress = totals.total ? Math.round((totals.done / totals.total) * 100) : 0;
       const folderKey = `folder:${project}`;
       return `
       <div class="project-group${expanded ? " is-expanded" : ""}" data-drop-project="${escapeHtml(project)}">
@@ -716,10 +704,6 @@ function renderProjectTree() {
           }">${icon("chevron-down")}</button>
           <span class="folder-icon" aria-hidden="true">${folderIconMarkup(rule?.icon)}</span>
           <span class="project-name">${escapeHtml(displayName)}</span>
-          <span class="project-progress" title="${totals.done}/${totals.total} 本を視聴済み">${
-            totals.total ? `${progress}%` : "—"
-          }</span>
-          <span class="project-item-count">${seriesList.length}</span>
           <button
             class="tree-context-trigger"
             type="button"
@@ -734,7 +718,6 @@ function renderProjectTree() {
             matchedSeries.length
               ? sortSeriesByPlaylistOrder(matchedSeries, data.playlistOrder).map(
               (series) => {
-                const stats = getSeriesStats(series);
                 const playlistKey = `playlist:${series.id}`;
                 const channelName = getChannelName(series);
                 return `
@@ -751,7 +734,6 @@ function renderProjectTree() {
                     >
                       <span class="playlist-file-icon" aria-hidden="true">${icon("youtube", "youtube-icon")}</span>
                       <span class="playlist-title">${escapeHtml(channelName)}</span>
-                      <span class="playlist-progress">${stats.progress}%</span>
                     </button>
                     <button
                       class="playlist-drag-handle"
@@ -889,6 +871,70 @@ async function hydrateRegisteredPlaylistChannels() {
   if (changed) saveData();
 }
 
+function recommendationCardHtml(candidate) {
+  const isNewChannel = candidate.channelRelationship === "new";
+  return `
+    <article class="recommendation-card${isNewChannel ? " is-new-channel" : ""}" data-recommendation-id="${escapeHtml(candidate.id)}">
+      <a
+        class="recommendation-thumbnail"
+        href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
+        target="_blank"
+        rel="noreferrer"
+        aria-label="「${escapeHtml(candidate.title)}」を YouTube で開く"
+      >
+        <img src="${escapeHtml(candidate.thumbnail || "./favicon.svg")}" alt="" loading="lazy" />
+        <span>${Number(candidate.itemCount) || "?"} 本</span>
+      </a>
+      <div class="recommendation-copy">
+        <h3>${escapeHtml(candidate.title)}</h3>
+        <p class="recommendation-channel">
+          <span>${escapeHtml(candidate.channelTitle || "投稿者名未取得")}</span>
+          ${isNewChannel ? '<b>新しい投稿者</b>' : ""}
+        </p>
+        <div class="recommendation-reasons">
+          ${(candidate.reasons || [])
+            .map((reason) => `<span>${icon("sparkles")}${escapeHtml(reason)}</span>`)
+            .join("")}
+        </div>
+      </div>
+      <div class="recommendation-actions">
+        <a
+          class="recommendation-youtube-link"
+          href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="YouTube で確認"
+          title="YouTube で確認"
+        >${icon("external-link")}</a>
+        <button
+          class="recommendation-add-button"
+          type="button"
+          data-recommendation-action="add"
+          data-playlist-id="${escapeHtml(candidate.id)}"
+        >${icon("plus")}<span>追加</span></button>
+      </div>
+    </article>
+  `;
+}
+
+function recommendationGroupHtml(title, description, candidates, kind) {
+  if (!candidates.length) return "";
+  return `
+    <section class="recommendation-group is-${kind}">
+      <header class="recommendation-group-head">
+        <div>
+          <span>${kind === "new" ? "DISCOVER" : "FAMILIAR"}</span>
+          <h3>${escapeHtml(title)}</h3>
+        </div>
+        <p>${escapeHtml(description)}</p>
+      </header>
+      <div class="recommendation-group-list">
+        ${candidates.map(recommendationCardHtml).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderRecommendationResults() {
   elements.refreshRecommendations.disabled = recommendationLoading;
   elements.recommendationDialog.classList.toggle("is-loading", recommendationLoading);
@@ -927,8 +973,14 @@ function renderRecommendationResults() {
     return;
   }
 
+  const newChannelCandidates = recommendationCandidates.filter(
+    (candidate) => candidate.channelRelationship === "new",
+  );
+  const knownChannelCandidates = recommendationCandidates.filter(
+    (candidate) => candidate.channelRelationship !== "new",
+  );
   elements.recommendationStatus.textContent = recommendationCandidates.length
-    ? `${recommendationCandidates.length} 件の候補 · ${formatDate(recommendationLastUpdatedAt)} 更新`
+    ? `${recommendationCandidates.length} 件中 ${newChannelCandidates.length} 件は新しい投稿者 · ${formatDate(recommendationLastUpdatedAt)} 更新`
     : `${formatDate(recommendationLastUpdatedAt)} 更新`;
   if (!recommendationCandidates.length) {
     elements.recommendationResults.innerHTML = `
@@ -941,49 +993,20 @@ function renderRecommendationResults() {
     return;
   }
 
-  elements.recommendationResults.innerHTML = recommendationCandidates
-    .map(
-      (candidate) => `
-        <article class="recommendation-card" data-recommendation-id="${escapeHtml(candidate.id)}">
-          <a
-            class="recommendation-thumbnail"
-            href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="「${escapeHtml(candidate.title)}」を YouTube で開く"
-          >
-            <img src="${escapeHtml(candidate.thumbnail || "./favicon.svg")}" alt="" loading="lazy" />
-            <span>${Number(candidate.itemCount) || "?"} 本</span>
-          </a>
-          <div class="recommendation-copy">
-            <h3>${escapeHtml(candidate.title)}</h3>
-            <p class="recommendation-channel">${escapeHtml(candidate.channelTitle || "投稿者名未取得")}</p>
-            <div class="recommendation-reasons">
-              ${(candidate.reasons || [])
-                .map((reason) => `<span>${icon("sparkles")}${escapeHtml(reason)}</span>`)
-                .join("")}
-            </div>
-          </div>
-          <div class="recommendation-actions">
-            <a
-              class="recommendation-youtube-link"
-              href="https://www.youtube.com/playlist?list=${encodeURIComponent(candidate.id)}"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="YouTube で確認"
-              title="YouTube で確認"
-            >${icon("external-link")}</a>
-            <button
-              class="recommendation-add-button"
-              type="button"
-              data-recommendation-action="add"
-              data-playlist-id="${escapeHtml(candidate.id)}"
-            >${icon("plus")}<span>追加</span></button>
-          </div>
-        </article>
-      `,
-    )
-    .join("");
+  elements.recommendationResults.innerHTML = [
+    recommendationGroupHtml(
+      "新しい投稿者から",
+      "登録済みの作品に関連する、まだライブラリにない投稿者です。",
+      newChannelCandidates,
+      "new",
+    ),
+    recommendationGroupHtml(
+      "同じ投稿者から",
+      "登録済みプレイリストと同じ投稿者の別シリーズです。",
+      knownChannelCandidates,
+      "known",
+    ),
+  ].join("");
 }
 
 async function loadRecommendations() {
@@ -1058,8 +1081,14 @@ async function loadRecommendations() {
 
     if (!candidateMap.size && failures.length) throw failures[0];
 
-    const candidateIds = [...candidateMap.keys()]
-      .filter((id) => !profile.registeredIds.has(id))
+    const candidateIds = [...candidateMap.values()]
+      .filter((candidate) => !profile.registeredIds.has(candidate.id))
+      .sort(
+        (left, right) =>
+          Number((right.sourceProjectNames?.size || 0) > 0) -
+          Number((left.sourceProjectNames?.size || 0) > 0),
+      )
+      .map((candidate) => candidate.id)
       .slice(0, RECOMMENDATION_CANDIDATE_LIMIT);
     if (candidateIds.length) {
       const details = await fetchPlaylistResources(candidateIds);

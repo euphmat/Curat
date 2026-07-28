@@ -62,6 +62,12 @@
           Boolean(appDocument.querySelector(".sidebar > .project-nav")),
         ],
         [
+          "サイドバーの進捗率と件数表示が廃止されている",
+          !appDocument.querySelector(
+            ".sidebar .project-nav-head, .sidebar .project-progress, .sidebar .project-item-count, .sidebar .playlist-progress",
+          ),
+        ],
+        [
           "右側の詳細サイドバーが完全に削除されている",
           !appDocument.querySelector(".detail-sidebar, #detailSidebar"),
         ],

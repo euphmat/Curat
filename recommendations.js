@@ -145,13 +145,15 @@
     return {
       ...candidate,
       score,
+      channelRelationship: matchingChannel ? "known" : "new",
       reasons: uniqueValues(reasons).slice(0, 2),
     };
   }
 
   function rankRecommendationCandidates(candidates, profile, limit = 12) {
+    if (limit <= 0) return [];
     const seen = new Set();
-    return (Array.isArray(candidates) ? candidates : [])
+    const ranked = (Array.isArray(candidates) ? candidates : [])
       .filter((candidate) => {
         const id = String(candidate?.id || "");
         if (!id || profile.registeredIds.has(id) || seen.has(id)) return false;
@@ -165,8 +167,26 @@
           right.score - left.score ||
           (Number(right.itemCount) || 0) - (Number(left.itemCount) || 0) ||
           left.title.localeCompare(right.title, "ja"),
-      )
-      .slice(0, limit);
+      );
+
+    // Prefer discovery outside known uploaders while retaining a few familiar
+    // channels when they are especially relevant.
+    const newChannelCandidates = ranked.filter(
+      (candidate) => candidate.channelRelationship === "new",
+    );
+    const newChannelTarget = Math.min(
+      newChannelCandidates.length,
+      Math.max(1, Math.ceil(limit * 0.67)),
+    );
+    const selected = newChannelCandidates.slice(0, newChannelTarget);
+    const selectedIds = new Set(selected.map((candidate) => candidate.id));
+    for (const candidate of ranked) {
+      if (selected.length >= limit) break;
+      if (selectedIds.has(candidate.id)) continue;
+      selected.push(candidate);
+      selectedIds.add(candidate.id);
+    }
+    return selected;
   }
 
   root.CuratRecommendations = {

@@ -387,24 +387,6 @@ a:focus-visible {
   font-size: 10px;
 }
 
-.project-nav-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 36px;
-  padding: 0 10px;
-  color: #9aa6a1;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  background: #0d1311;
-  border-block: 1px solid #202a27;
-}
-
-.project-nav-head b {
-  font: inherit;
-}
-
 .project-tree {
   flex: 1;
   min-height: 0;
@@ -430,7 +412,7 @@ a:focus-visible {
 .project-row {
   position: relative;
   display: grid;
-  grid-template-columns: 22px 20px minmax(0, 1fr) auto auto 34px;
+  grid-template-columns: 22px 20px minmax(0, 1fr) 34px;
   align-items: center;
   gap: 7px;
   min-height: 44px;
@@ -475,10 +457,6 @@ body.is-dragging-playlist .project-row {
 .project-group.is-drop-target .folder-icon,
 .project-group.is-drop-target.is-expanded .folder-icon {
   background: #111714;
-}
-
-.project-group.is-drop-target .project-item-count {
-  color: #344039;
 }
 
 .tree-chevron {
@@ -535,19 +513,6 @@ body.is-dragging-playlist .project-row {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.project-item-count {
-  color: #a1aca7;
-  font-size: 12px;
-}
-
-.project-progress {
-  min-width: 28px;
-  color: #929f99;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 
 .project-playlists {
@@ -609,7 +574,7 @@ body.is-dragging-playlist .project-row {
 
 .project-playlist {
   display: grid;
-  grid-template-columns: 15px minmax(0, 1fr) auto;
+  grid-template-columns: 15px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -650,12 +615,6 @@ body.is-dragging-playlist .project-row {
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.playlist-progress {
-  color: #929f99;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
 }
 
 .project-playlist-row .tree-context-trigger {
@@ -2904,16 +2863,6 @@ body.detail-pinned .detail-sidebar {
   border-radius: 12px;
 }
 
-.project-nav-head {
-  min-height: 32px;
-  margin: 0 1px 4px;
-  padding-inline: 10px;
-  background: rgba(13, 10, 34, 0.44);
-  border: 0;
-  border-radius: 9px;
-  letter-spacing: 0.02em;
-}
-
 .project-tree {
   padding: 3px 1px 10px;
 }
@@ -2923,7 +2872,7 @@ body.detail-pinned .detail-sidebar {
 }
 
 .project-row {
-  grid-template-columns: 22px 30px minmax(0, 1fr) auto auto 30px;
+  grid-template-columns: 22px 30px minmax(0, 1fr) 30px;
   gap: 7px;
   min-height: 50px;
   padding: 3px 4px 3px 2px;
@@ -3009,27 +2958,6 @@ body.detail-pinned .detail-sidebar {
 .project-row:hover .project-name,
 .project-row.is-selected .project-name {
   color: #fff;
-}
-
-.project-progress,
-.project-item-count {
-  min-width: 0;
-  padding: 2px 6px;
-  font-size: 10px;
-  line-height: 1.45;
-  border-radius: 999px;
-}
-
-.project-progress {
-  color: #b7adc9;
-  background: rgba(118, 95, 164, 0.12);
-}
-
-.project-item-count {
-  min-width: 22px;
-  color: #d5cced;
-  text-align: center;
-  background: rgba(165, 135, 226, 0.15);
 }
 
 .project-playlists {
@@ -3477,11 +3405,6 @@ body::after {
   box-shadow:
     0 0 0 3px rgba(159, 140, 255, 0.13),
     0 0 26px rgba(119, 233, 255, 0.08);
-}
-
-.project-nav-head {
-  background: rgba(20, 16, 46, 0.72);
-  border-block-color: rgba(174, 151, 244, 0.14);
 }
 
 .sidebar-footer {
@@ -6378,6 +6301,53 @@ body.detail-pinned .task-state-button {
 
 .recommendation-results {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
+}
+
+.recommendation-group {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.recommendation-group + .recommendation-group {
+  padding-top: 20px;
+  border-top: 1px solid rgba(190, 173, 255, 0.15);
+}
+
+.recommendation-group-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.recommendation-group-head span {
+  display: block;
+  margin-bottom: 3px;
+  color: #8feaff;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.recommendation-group-head h3 {
+  margin: 0;
+  color: #eee8f8;
+  font-size: 16px;
+}
+
+.recommendation-group-head p {
+  margin: 0;
+  color: #8f879f;
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.recommendation-group-list {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 11px;
 }
@@ -6397,6 +6367,11 @@ body.detail-pinned .task-state-button {
 .recommendation-card:hover {
   background: rgba(43, 35, 82, 0.82);
   border-color: rgba(141, 231, 245, 0.3);
+}
+
+.recommendation-card.is-new-channel {
+  border-color: rgba(126, 231, 244, 0.25);
+  box-shadow: inset 2px 0 rgba(126, 231, 244, 0.36);
 }
 
 .recommendation-thumbnail {
@@ -6444,12 +6419,30 @@ body.detail-pinned .task-state-button {
 }
 
 .recommendation-channel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0 0 7px;
-  overflow: hidden;
   color: #958ca8;
   font-size: 10px;
+}
+
+.recommendation-channel > span {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.recommendation-channel b {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  color: #bdf6fb;
+  font-size: 8px;
+  line-height: 1.2;
+  background: rgba(74, 196, 219, 0.14);
+  border: 1px solid rgba(126, 231, 244, 0.25);
+  border-radius: 999px;
 }
 
 .recommendation-reasons {
@@ -6598,9 +6591,19 @@ body.detail-pinned .task-state-button {
     display: none;
   }
 
-  .recommendation-results,
+  .recommendation-group-list,
   .recommendation-loading {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .recommendation-group-head {
+    align-items: start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .recommendation-group-head p {
+    text-align: left;
   }
 }
 
@@ -6788,7 +6791,7 @@ body.is-touch-reordering {
   }
 
   .project-row {
-    grid-template-columns: 36px 24px minmax(0, 1fr) auto auto 42px;
+    grid-template-columns: 36px 24px minmax(0, 1fr) 42px;
     gap: 5px;
   }
 
@@ -6984,17 +6987,6 @@ body.is-touch-reordering {
 
   .workspace .task-thumb {
     width: 88px;
-  }
-}
-
-@media (max-width: 850px) and (hover: none),
-  (max-width: 850px) and (pointer: coarse) {
-  .project-progress {
-    display: none;
-  }
-
-  .project-row {
-    grid-template-columns: 36px 24px minmax(0, 1fr) auto 42px;
   }
 }
 

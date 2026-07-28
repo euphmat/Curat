@@ -58,11 +58,47 @@
   const todoProfile = buildRecommendationProfile(baseSeries, projects);
   const todoRanked = rankRecommendationCandidates(candidates, todoProfile);
   equal(todoRanked.some((item) => item.id === "registered"), false, "登録済み候補を除外する");
-  equal(todoRanked[0].id, "same-channel", "同じ投稿者の候補を優先する");
+  equal(todoRanked[0].id, "same-project", "未登録の投稿者による関連候補を優先する");
+  equal(
+    todoRanked.find((item) => item.id === "same-project").channelRelationship,
+    "new",
+    "未登録の投稿者を判定する",
+  );
+  equal(
+    todoRanked.find((item) => item.id === "same-channel").channelRelationship,
+    "known",
+    "登録済みと同じ投稿者を判定する",
+  );
   equal(
     todoRanked.find((item) => item.id === "same-project").reasons[0],
     "登録済みの「ゼルダの伝説」に関連",
     "作品との関連理由を表示する",
+  );
+
+  const diversityRanked = rankRecommendationCandidates(
+    [
+      ...Array.from({ length: 4 }, (_, index) => ({
+        id: `known-${index}`,
+        title: `実況者Aの実況 ${index}`,
+        channelId: "channel-a",
+        channelTitle: "実況者A",
+        itemCount: 100 - index,
+      })),
+      {
+        id: "only-new-channel",
+        title: "ゼルダの伝説 実況",
+        channelId: "channel-new",
+        channelTitle: "新しい実況者",
+        itemCount: 2,
+      },
+    ],
+    todoProfile,
+    3,
+  );
+  equal(
+    diversityRanked.some((item) => item.id === "only-new-channel"),
+    true,
+    "同じ投稿者の高評価候補が多くても未登録投稿者を結果に含める",
   );
 
   const doneSeries = structuredClone(baseSeries);
