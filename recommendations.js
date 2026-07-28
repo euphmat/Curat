@@ -191,16 +191,30 @@
     const newGameCandidates = ranked.filter(
       (candidate) => candidate.recommendationType === "new-game",
     );
-    const selected = [
-      ...newChannelCandidates.slice(0, Math.max(1, Math.ceil(limit * 0.5))),
-      ...newGameCandidates.slice(0, Math.max(1, Math.ceil(limit * 0.25))),
-    ].slice(0, limit);
-    const selectedIds = new Set(selected.map((candidate) => candidate.id));
-    for (const candidate of ranked) {
-      if (selected.length >= limit) break;
-      if (selectedIds.has(candidate.id)) continue;
+    const knownChannelCandidates = ranked.filter(
+      (candidate) => candidate.recommendationType === "known-channel",
+    );
+    const selected = [];
+    const selectedIds = new Set();
+    const selectCandidate = (candidate) => {
+      if (!candidate || selected.length >= limit || selectedIds.has(candidate.id)) return;
       selected.push(candidate);
       selectedIds.add(candidate.id);
+    };
+
+    // Seed every available tab, then reserve more space for discovery.
+    [newChannelCandidates[0], newGameCandidates[0], knownChannelCandidates[0]].forEach(
+      selectCandidate,
+    );
+    newChannelCandidates
+      .slice(1, Math.max(1, Math.ceil(limit * 0.5)))
+      .forEach(selectCandidate);
+    newGameCandidates
+      .slice(1, Math.max(1, Math.ceil(limit * 0.25)))
+      .forEach(selectCandidate);
+    for (const candidate of ranked) {
+      if (selected.length >= limit) break;
+      selectCandidate(candidate);
     }
     return selected;
   }

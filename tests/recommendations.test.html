@@ -148,6 +148,40 @@
     "未登録投稿者の候補が多くても新しいゲームを結果に含める",
   );
 
+  const allTabsRanked = rankRecommendationCandidates(
+    [
+      ...Array.from({ length: 6 }, (_, index) => ({
+        id: `crowded-new-channel-${index}`,
+        title: `ゼルダの伝説 実況 ${index}`,
+        channelId: `crowded-channel-${index}`,
+        channelTitle: `発見実況者${index}`,
+        sourceProjectNames: new Set(["ゼルダの伝説"]),
+        itemCount: 100 - index,
+      })),
+      {
+        id: "seed-new-game",
+        title: "未登録ゲーム 実況",
+        channelId: "channel-a",
+        channelTitle: "実況者A",
+        itemCount: 2,
+      },
+      {
+        id: "seed-known-channel",
+        title: "ゼルダの伝説 番外編",
+        channelId: "channel-a",
+        channelTitle: "実況者A",
+        itemCount: 2,
+      },
+    ],
+    todoProfile,
+    3,
+  );
+  equal(
+    new Set(allTabsRanked.map((item) => item.recommendationType)).size,
+    3,
+    "候補がある場合は3タブすべての項目を結果に残す",
+  );
+
   const doneSeries = structuredClone(baseSeries);
   doneSeries[0].tasks[0].status = "done";
   const doneRanked = rankRecommendationCandidates(
