@@ -146,7 +146,6 @@
       <main class="main">
         <header class="topbar">
           <div class="topbar-title">
-            <span class="topbar-eyebrow">PLAYLIST WORKSPACE</span>
             <h1 id="viewTitle">実況ライブラリ</h1>
           </div>
           <form class="header-add-form" id="playlistForm">
@@ -162,11 +161,16 @@
                 required
               />
             </label>
-            <button class="header-add-button" type="submit" data-default-action>
+            <button
+              class="header-add-button"
+              type="submit"
+              title="プレイリストを追加"
+              aria-label="プレイリストを追加"
+              data-default-action
+            >
               <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
-              <span>追加</span>
             </button>
-            <p class="header-form-message" id="formMessage" role="status" aria-live="polite"></p>
+            <p id="formMessage" role="status" aria-live="polite" hidden></p>
           </form>
           <div class="topbar-actions">
             <button
@@ -177,7 +181,6 @@
               aria-label="登録済みプレイリストからおすすめを探す"
             >
               <svg class="icon" aria-hidden="true"><use href="#icon-sparkles"></use></svg>
-              <span>おすすめ</span>
             </button>
             <button class="icon-button" id="syncAll" type="button" title="すべて再同期" aria-label="すべて再同期"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg></button>
             <button
@@ -188,7 +191,6 @@
               aria-label="すべてのプレイリストとフォルダーを削除"
             >
               <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
-              <span class="delete-all-label">全削除</span>
             </button>
           </div>
         </header>

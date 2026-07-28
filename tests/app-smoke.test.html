@@ -80,6 +80,35 @@
           Boolean(appDocument.querySelector(".topbar > #playlistForm #playlistUrl")),
         ],
         [
+          "ヘッダーの補助見出しと取り込み結果が表示されない",
+          !appDocument.querySelector(".topbar-eyebrow") &&
+            appDocument.querySelector("#formMessage")?.hidden,
+        ],
+        [
+          "ヘッダー操作が読み上げ可能なアイコンボタンになっている",
+          ["#playlistForm .header-add-button", "#openRecommendations", "#deleteAll"].every(
+            (selector) => {
+              const button = appDocument.querySelector(selector);
+              return (
+                button?.querySelector(".icon") &&
+                !button.querySelector("span") &&
+                Boolean(button.getAttribute("aria-label"))
+              );
+            },
+          ),
+        ],
+        [
+          "ヘッダーのチャンネル名を省略せず表示できる",
+          (() => {
+            const titleStyle = appWindow.getComputedStyle(appDocument.querySelector("#viewTitle"));
+            return (
+              titleStyle.whiteSpace !== "nowrap" &&
+              titleStyle.textOverflow !== "ellipsis" &&
+              titleStyle.overflow !== "hidden"
+            );
+          })(),
+        ],
+        [
           "登録済みデータからおすすめを開ける",
           Boolean(
             appDocument.querySelector("#openRecommendations") &&

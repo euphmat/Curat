@@ -1312,6 +1312,7 @@ function revealImportedPlaylist(series) {
 function clearNewVideoHighlights() {
   clearTimeout(newVideoHighlightTimer);
   newVideoHighlightTimer = null;
+  $("#sidebar")?.classList.remove("has-new-videos");
   $$(".project-group.has-new-videos, .project-playlist-row.has-new-videos", elements.projectTree)
     .forEach((item) => item.classList.remove("has-new-videos"));
   $$(".new-video-badge", elements.projectTree).forEach((item) => item.remove());
@@ -1322,6 +1323,7 @@ function highlightPlaylistUpdates(updates) {
   const activeUpdates = updates.filter((update) => update.newTasks.length > 0);
   if (!activeUpdates.length) return;
 
+  $("#sidebar")?.classList.add("has-new-videos");
   const folderCounts = new Map();
   for (const { series, newTasks } of activeUpdates) {
     folderCounts.set(series.project, (folderCounts.get(series.project) || 0) + newTasks.length);
@@ -1420,8 +1422,9 @@ function setFormLoading(isLoading, message = "") {
   const button = $("button[type='submit']", elements.form);
   button.disabled = isLoading;
   elements.form.setAttribute("aria-busy", String(isLoading));
-  const label = $("span", button);
-  if (label) label.textContent = isLoading ? "取得中…" : "追加";
+  const buttonLabel = isLoading ? "プレイリストを取得中" : "プレイリストを追加";
+  button.setAttribute("aria-label", buttonLabel);
+  button.title = buttonLabel;
   if (message) setFormMessage(message, false);
 }
 
