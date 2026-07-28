@@ -336,7 +336,6 @@ let recommendationLastUpdatedAt = "";
 let recommendationSourceSignature = "";
 let activeRecommendationTab = "new-channel";
 let activeBlockedRecommendationType = "playlists";
-let sameGameSearchSeriesId = "";
 let sameGameSearchProjectName = "";
 let sameGameSearchCandidates = [];
 let sameGameSearchLoading = false;
@@ -1319,8 +1318,8 @@ function sameGameSearchCardHtml(candidate) {
       <div class="same-game-search-copy">
         <h3>${escapeHtml(candidate.title)}</h3>
         <p>
-          <span>${escapeHtml(candidate.channelTitle || "投稿者名未取得")}</span>
-          <b>未追加の投稿者</b>
+          <span>${escapeHtml(candidate.channelTitle || "チャンネル名未取得")}</span>
+          <b>新しいチャンネル</b>
         </p>
         <div class="same-game-search-reasons">
           ${(candidate.reasons || [])
@@ -1356,7 +1355,7 @@ function renderSameGameSearchResults() {
   );
   if (sameGameSearchLoading) {
     elements.sameGameSearchStatus.textContent =
-      "YouTube から別の投稿者を探しています…";
+      "YouTube から新しいチャンネルを探しています…";
     elements.sameGameSearchResults.innerHTML = `
       <div class="same-game-search-loading" aria-hidden="true">
         ${Array.from(
@@ -1379,8 +1378,8 @@ function renderSameGameSearchResults() {
     return;
   }
   elements.sameGameSearchStatus.textContent = sameGameSearchCandidates.length
-    ? `追加済みの投稿者を除外 · ${sameGameSearchCandidates.length} 件`
-    : "追加済みの投稿者を除外して検索しました";
+    ? `追加済みのチャンネルを除外 · ${sameGameSearchCandidates.length} 件`
+    : "追加済みのチャンネルを除外して検索しました";
   elements.sameGameSearchResults.innerHTML = sameGameSearchCandidates.length
     ? `<div class="same-game-search-list">${sameGameSearchCandidates
         .map(sameGameSearchCardHtml)
@@ -1388,7 +1387,7 @@ function renderSameGameSearchResults() {
     : `
       <div class="same-game-search-empty">
         ${icon("search")}
-        <strong>別の投稿者によるプレイリストが見つかりませんでした</strong>
+        <strong>新しいチャンネルのプレイリストが見つかりませんでした</strong>
         <span>ゲーム名や別名をフォルダー設定へ追加すると、検索しやすくなります。</span>
       </div>
     `;
@@ -1416,13 +1415,17 @@ function uniqueRecommendationSearchTerms(values) {
 }
 
 async function loadSameGameSearch() {
-  if (sameGameSearchLoading || !sameGameSearchSeriesId) return;
-  const sourceSeries = data.series.find(
-    (series) => series.id === sameGameSearchSeriesId,
-  );
-  if (!sourceSeries) {
+  if (sameGameSearchLoading || !sameGameSearchProjectName) return;
+  const projectName = sameGameSearchProjectName;
+  const projectExists =
+    Boolean(projectRuleByName(projectName)) ||
+    data.series.some(
+      (series) =>
+        (series.project || series.title || "").trim() === projectName,
+    );
+  if (!projectExists) {
     elements.sameGameSearchDialog.close();
-    showToast("検索元のプレイリストが見つかりません", true);
+    showToast("検索元のフォルダーが見つかりません", true);
     return;
   }
   sameGameSearchLoading = true;
@@ -1430,8 +1433,6 @@ async function loadSameGameSearch() {
   renderSameGameSearchResults();
   try {
     await hydrateRegisteredPlaylistChannels();
-    const projectName =
-      (sourceSeries.project || sourceSeries.title || "").trim();
     const relatedSeries = data.series.filter(
       (series) =>
         (series.project || series.title || "").trim() === projectName,
@@ -1441,7 +1442,12 @@ async function loadSameGameSearch() {
       aliases: [],
       learnedAliases: [],
     };
-    const profile = buildRecommendationProfile(relatedSeries, [rule]);
+    // Empty folders still need a game signal so their search results are
+    // classified as "same game × new channel".
+    const profile = buildRecommendationProfile(
+      relatedSeries.length ? relatedSeries : [{ project: projectName }],
+      [rule],
+    );
     profile.registeredIds = new Set(
       data.series.map((series) => String(series.id || "")).filter(Boolean),
     );
@@ -1519,10 +1525,10 @@ async function loadSameGameSearch() {
   }
 }
 
-function openSameGameSearchDialog(seriesId) {
-  const series = data.series.find((item) => item.id === seriesId);
-  if (!series) {
-    showToast("検索元のプレイリストが見つかりません", true);
+function openSameGameSearchDialogForProject(projectName) {
+  const normalizedProjectName = String(projectName || "").trim();
+  if (!normalizedProjectName) {
+    showToast("検索元のフォルダーが見つかりません", true);
     return;
   }
   if (!config.apiKey) {
@@ -1530,21 +1536,28 @@ function openSameGameSearchDialog(seriesId) {
     showToast("検索には YouTube API キーが必要です", true);
     return;
   }
-  sameGameSearchSeriesId = series.id;
-  sameGameSearchProjectName = (
-    series.project ||
-    series.title ||
-    "名称未設定"
-  ).trim();
+  sameGameSearchProjectName = normalizedProjectName;
   sameGameSearchCandidates = [];
   sameGameSearchError = "";
-  elements.sameGameSearchTitle.textContent = "別の投稿者を検索";
+  elements.sameGameSearchTitle.textContent =
+    "新しいチャンネルのプレイリストを検索";
   elements.sameGameSearchLead.textContent =
-    `「${sameGameSearchProjectName}」を、現在追加済みの投稿者を除外して検索します。`;
+    `「${sameGameSearchProjectName}」のプレイリストを、現在追加済みのチャンネルを除外して検索します。`;
   if (!elements.sameGameSearchDialog.open) {
     elements.sameGameSearchDialog.showModal();
   }
   loadSameGameSearch();
+}
+
+function openSameGameSearchDialog(seriesId) {
+  const series = data.series.find((item) => item.id === seriesId);
+  if (!series) {
+    showToast("検索元のプレイリストが見つかりません", true);
+    return;
+  }
+  openSameGameSearchDialogForProject(
+    series.project || series.title || "名称未設定",
+  );
 }
 
 function placeSeriesInSameGameProject(series) {
@@ -2934,6 +2947,8 @@ function contextMenuItems(kind, id) {
         ["new-folder", "folder-plus", "新しいフォルダーを作成…", ""],
         ["edit-folder", "edit", "フォルダー名を変更…", "F2"],
         ["change-folder-icon", "sparkles", "アイコンを変更…", ""],
+        ["group", "検索"],
+        ["search-same-game", "user-plus", "新しいチャンネルのプレイリストを検索…", ""],
         ["group", "表示"],
         expanded
           ? ["collapse-folder", "chevrons-up", "フォルダーを折りたたむ", ""]
@@ -3003,7 +3018,11 @@ async function runTreeContextAction(action) {
   if (action === "open-playlist") openSeries(target.id);
   if (action === "watch-playlist") continueSeries(target.id);
   if (action === "search-same-game") {
-    openSameGameSearchDialog(target.id);
+    if (target.kind === "folder") {
+      openSameGameSearchDialogForProject(target.id);
+    } else {
+      openSameGameSearchDialog(target.id);
+    }
   }
   if (action === "move-playlist") openProjectDialog(target.id);
   if (action === "delete-playlist") await deleteSeries(target.id);

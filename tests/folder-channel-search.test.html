@@ -1,0 +1,124 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>RUNNING</title>
+<pre id="result">running</pre>
+<iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script src="backup-test-helper.js"></script>
+<script>
+  const settingsKey = "curat-browser-settings-v1";
+  const previousBrowserSettings = localStorage.getItem(settingsKey);
+  localStorage.setItem(settingsKey, JSON.stringify({ apiKey: "test-api-key" }));
+
+  const now = "2026-07-28T00:00:00.000Z";
+  const testData = {
+    version: 1,
+    updatedAt: now,
+    series: [],
+    projects: [{
+      name: "空ゲーム",
+      aliases: ["Empty Game"],
+      learnedAliases: [],
+      icon: "builtin:gamepad",
+    }],
+    playlistOrder: [],
+  };
+
+  function restoreBrowserSettings() {
+    if (previousBrowserSettings === null) {
+      localStorage.removeItem(settingsKey);
+    } else {
+      localStorage.setItem(settingsKey, previousBrowserSettings);
+    }
+  }
+
+  const frame = document.querySelector("iframe");
+  frame.addEventListener("load", async () => {
+    try {
+      await loadCuratTestData(frame, testData);
+      const appWindow = frame.contentWindow;
+      const appDocument = frame.contentDocument;
+      const requests = [];
+      appWindow.fetch = async (input) => {
+        const url = new URL(String(input));
+        requests.push(url);
+        if (url.pathname.endsWith("/search")) {
+          return {
+            ok: true,
+            json: async () => ({
+              items: [{
+                id: { playlistId: "new-channel-playlist" },
+                snippet: {
+                  title: "空ゲーム 実況プレイリスト",
+                  description: "空ゲームの実況",
+                  channelId: "new-channel-id",
+                  channelTitle: "新しいチャンネル",
+                  thumbnails: {},
+                },
+              }],
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            items: [{
+              id: "new-channel-playlist",
+              snippet: {
+                title: "空ゲーム 実況プレイリスト",
+                description: "空ゲームの実況",
+                channelId: "new-channel-id",
+                channelTitle: "新しいチャンネル",
+                thumbnails: {},
+              },
+              contentDetails: { itemCount: 12 },
+              status: { privacyStatus: "public" },
+            }],
+          }),
+        };
+      };
+
+      const folderRow = await waitForCuratTest(
+        () => appDocument.querySelector("[data-tree-folder='空ゲーム']"),
+      );
+      folderRow.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 220,
+        clientY: 180,
+      }));
+      appDocument.querySelector("[data-context-action='search-same-game']").click();
+
+      const resultCard = await waitForCuratTest(
+        () => appDocument.querySelector(
+          "[data-same-game-candidate='new-channel-playlist']",
+        ),
+      );
+      const dialog = appDocument.querySelector("#sameGameSearchDialog");
+      const searchQueries = requests
+        .filter((url) => url.pathname.endsWith("/search"))
+        .map((url) => url.searchParams.get("q"));
+      const passed =
+        dialog.open &&
+        appDocument.querySelector("#sameGameSearchTitle").textContent.includes(
+          "新しいチャンネル",
+        ) &&
+        appDocument.querySelector("#sameGameSearchLead").textContent.includes(
+          "空ゲーム",
+        ) &&
+        resultCard.textContent.includes("新しいチャンネル") &&
+        searchQueries.some((query) => query === "空ゲーム 実況") &&
+        searchQueries.some((query) => query === "Empty Game 実況");
+
+      document.querySelector("#result").textContent = passed
+        ? "PASS empty folders search for playlists from new channels"
+        : `FAIL dialog=${dialog.open} queries=${JSON.stringify(searchQueries)} card=${resultCard.textContent}`;
+      document.title = passed ? "PASS" : "FAIL";
+    } catch (error) {
+      document.querySelector("#result").textContent = `FAIL ${error.message}`;
+      document.title = "FAIL";
+    } finally {
+      restoreBrowserSettings();
+    }
+  }, { once: true });
+  frame.src = "../index.html";
+</script>
