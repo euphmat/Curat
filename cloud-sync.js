@@ -74,7 +74,9 @@ export class CloudSync {
       ]);
       this.modules = { ...appModule, ...authModule, ...databaseModule };
       const app = appModule.initializeApp(firebaseConfig);
-      this.auth = authModule.getAuth(app);
+      this.auth = authModule.initializeAuth(app, {
+        persistence: authModule.inMemoryPersistence,
+      });
       this.database = databaseModule.getDatabase(app);
       authModule.onAuthStateChanged(this.auth, (user) => {
         this.handleAuthState(user).catch((error) => this.fail(error));

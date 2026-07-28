@@ -1,10 +1,6 @@
 import { CloudSync } from "./cloud-sync.js";
 
 const APP_VERSION = 1;
-const DATA_KEY = "playlog:data:v1";
-const CONFIG_KEY = "playlog:config:v1";
-const DB_NAME = "playlog-file-handles";
-const HANDLE_KEY = "save-file";
 const API_BASE = "https://www.googleapis.com/youtube/v3";
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 480;
@@ -116,11 +112,9 @@ const elements = {
   mobileMenu: $("#mobileMenu"),
 };
 
-let data = loadData();
-let config = loadConfig();
+let data = defaultData();
+let config = { apiKey: "" };
 let detailSeriesId = null;
-let saveFileHandle = null;
-let fileSaveTimer = null;
 let pendingPlaylistUrl = "";
 let editingProjectSeriesId = null;
 let editingProjectOriginalName = "";
@@ -166,7 +160,7 @@ const cloudSync = new CloudSync({
           ? remoteData.playlistOrder
           : [],
       });
-      saveData({ syncCloud: false, syncFile: false, touchUpdatedAt: false });
+      saveData({ syncCloud: false, touchUpdatedAt: false });
       render();
       if (openSeriesId && data.series.some((series) => series.id === openSeriesId)) {
         openSeries(openSeriesId);
@@ -197,16 +191,6 @@ if (Number.isFinite(config.sidebarWidth)) {
     `${sidebarWidth}px`,
   );
   elements.sidebarResizer.setAttribute("aria-valuenow", String(Math.round(sidebarWidth)));
-}
-
-function loadData() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(DATA_KEY));
-    if (parsed && Array.isArray(parsed.series)) return migrateData(parsed);
-  } catch (error) {
-    console.warn("保存データの読み込みに失敗しました", error);
-  }
-  return defaultData();
 }
 
 function migrateData(saved) {
@@ -258,21 +242,7 @@ function migrateData(saved) {
   };
 }
 
-function loadConfig() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
-    delete saved.detailPinned;
-    return { apiKey: "", ...saved };
-  } catch {
-    return { apiKey: "" };
-  }
-}
-
-function saveConfig() {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-}
-
-function saveData({ syncFile = true, syncCloud = true, touchUpdatedAt = true } = {}) {
+function saveData({ syncCloud = true, touchUpdatedAt = true } = {}) {
   data.playlistOrder = normalizePlaylistOrder(data.series, data.playlistOrder);
   for (const series of data.series) {
     if (Array.isArray(series.taskOrder)) {
@@ -283,16 +253,6 @@ function saveData({ syncFile = true, syncCloud = true, touchUpdatedAt = true } =
     }
   }
   if (touchUpdatedAt) data.updatedAt = new Date().toISOString();
-  try {
-    localStorage.setItem(DATA_KEY, JSON.stringify(data));
-  } catch (error) {
-    console.warn("localStorage の容量制限（QuotaExceededError）を検出したため IndexedDB のみ保存します", error);
-  }
-  saveDataToIDB(data);
-  if (syncFile && saveFileHandle) {
-    clearTimeout(fileSaveTimer);
-    fileSaveTimer = setTimeout(() => writeConnectedFile(), 350);
-  }
   if (syncCloud && !applyingCloudData) cloudSync.queue(data);
   updateBackupUI();
 }
@@ -798,7 +758,6 @@ function revealImportedPlaylist(series) {
     document.body.classList.remove("sidebar-collapsed");
     config.sidebarCollapsed = false;
   }
-  saveConfig();
   updateSidebarControls();
   renderProjectTree();
 
@@ -1081,7 +1040,6 @@ function removeProjectIfEmpty(projectName) {
 function setProjectExpanded(projectName, expanded, { focus = true } = {}) {
   config.expandedProjects ||= {};
   config.expandedProjects[projectName] = expanded;
-  saveConfig();
   selectedTreeKey = `folder:${projectName}`;
   renderProjectTree();
   if (focus) {
@@ -1097,7 +1055,6 @@ function setAllProjectsExpanded(expanded) {
   config.expandedProjects ||= {};
   for (const project of projectNames()) config.expandedProjects[project] = expanded;
   if (!expanded) selectedTreeKey = "";
-  saveConfig();
   renderProjectTree();
   showToast(expanded ? "すべてのフォルダーを展開しました" : "すべてのフォルダーを折りたたみました");
 }
@@ -1392,7 +1349,6 @@ function saveFolderFromDialog() {
     if (originalName !== name) delete config.expandedProjects[originalName];
   }
 
-  saveConfig();
   saveData();
   selectedTreeKey = `folder:${name}`;
   const wasPopover = folderEditorPresentation === "popover";
@@ -1463,7 +1419,6 @@ async function deleteFolder(projectName) {
   }
   data.projects = data.projects.filter((project) => project.name !== projectName);
   if (config.expandedProjects) delete config.expandedProjects[projectName];
-  saveConfig();
   saveData();
   selectedTreeKey = "";
   closeFolderEditor({ restoreFocus: false });
@@ -1636,7 +1591,6 @@ function moveSeriesToProject(seriesId, projectName) {
   series.updatedAt = new Date().toISOString();
   config.expandedProjects ||= {};
   config.expandedProjects[targetName] = true;
-  saveConfig();
   selectedTreeKey = `playlist:${series.id}`;
   saveData();
   render();
@@ -2078,169 +2032,9 @@ async function deleteAllPlaylistsAndFolders() {
   data.projects = [];
   config.expandedProjects = {};
   selectedTreeKey = "";
-  saveConfig();
   saveData();
   render();
   showToast("すべてのプレイリストとフォルダーを削除しました");
-}
-
-async function openHandleDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 2);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains("handles")) {
-        db.createObjectStore("handles");
-      }
-      if (!db.objectStoreNames.contains("appData")) {
-        db.createObjectStore("appData");
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function saveDataToIDB(dataToSave) {
-  try {
-    const db = await openHandleDb();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("appData", "readwrite");
-      tx.objectStore("appData").put(dataToSave, "mainData");
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (error) {
-    console.warn("IndexedDB への保存に失敗しました", error);
-  }
-}
-
-async function loadDataFromIDB() {
-  try {
-    const db = await openHandleDb();
-    return new Promise((resolve, reject) => {
-      const request = db.transaction("appData").objectStore("appData").get("mainData");
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
-  } catch (error) {
-    console.warn("IndexedDB からの読み込みに失敗しました", error);
-    return null;
-  }
-}
-
-async function restoreIDBData() {
-  const idbData = await loadDataFromIDB();
-  if (idbData && Array.isArray(idbData.series)) {
-    const idbUpdatedAt = new Date(idbData.updatedAt || 0);
-    const currentUpdatedAt = new Date(data.updatedAt || 0);
-    if (idbData.series.length > data.series.length || idbUpdatedAt >= currentUpdatedAt) {
-      data = migrateData(idbData);
-      render();
-    }
-  }
-}
-
-async function storeFileHandle(handle) {
-  const db = await openHandleDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("handles", "readwrite");
-    tx.objectStore("handles").put(handle, HANDLE_KEY);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function getStoredFileHandle() {
-  const db = await openHandleDb();
-  return new Promise((resolve, reject) => {
-    const request = db.transaction("handles").objectStore("handles").get(HANDLE_KEY);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function restoreFileConnection() {
-  if (!("showSaveFilePicker" in window)) return;
-  try {
-    const handle = await getStoredFileHandle();
-    if (handle && (await handle.queryPermission({ mode: "readwrite" })) === "granted") {
-      saveFileHandle = handle;
-      updateBackupUI();
-    }
-  } catch (error) {
-    console.warn("保存ファイル接続を復元できませんでした", error);
-  }
-}
-
-async function connectSaveFile() {
-  if (!("showSaveFilePicker" in window)) {
-    downloadBackup();
-    showToast("このブラウザでは自動同期に未対応のため、ファイルをダウンロードしました");
-    return;
-  }
-  try {
-    const handle = await window.showSaveFilePicker({
-      suggestedName: "curat-save.json",
-      types: [{ description: "Curat 保存データ", accept: { "application/json": [".json"] } }],
-    });
-    const permission = await handle.requestPermission({ mode: "readwrite" });
-    if (permission !== "granted") throw new Error("ファイルへの書き込みが許可されませんでした。");
-
-    const existingFile = await handle.getFile();
-    if (existingFile.size > 0) {
-      let existingBackup;
-      try {
-        existingBackup = JSON.parse(await existingFile.text());
-      } catch {
-        throw new Error("選択したファイルは JSON 形式ではありません。別のファイル名を選んでください。");
-      }
-      if (!isValidBackup(existingBackup)) {
-        throw new Error("選択したファイルは Curat の保存データではありません。");
-      }
-
-      const fileUpdatedAt = new Date(existingBackup.data.updatedAt || existingBackup.exportedAt || 0);
-      const localUpdatedAt = new Date(data.updatedAt || 0);
-      const shouldRestore = !data.series.length || fileUpdatedAt > localUpdatedAt;
-      if (shouldRestore) {
-        data = migrateData(existingBackup.data);
-        saveData({ syncFile: false });
-        render();
-        showToast(`${data.series.length} 件のプレイリストを保存ファイルから復元しました`);
-      } else if (localUpdatedAt > fileUpdatedAt) {
-        const shouldUpdateFile = window.confirm(
-          "ブラウザ内のデータの方が新しいようです。現在のデータで保存ファイルを更新しますか？",
-        );
-        if (!shouldUpdateFile) return;
-      }
-    }
-
-    saveFileHandle = handle;
-    await storeFileHandle(handle);
-    await writeConnectedFile();
-    showToast("保存ファイルを接続しました");
-  } catch (error) {
-    if (error.name !== "AbortError") showToast(error.message, true);
-  }
-}
-
-async function writeConnectedFile() {
-  if (!saveFileHandle) return;
-  try {
-    const permission = await saveFileHandle.queryPermission({ mode: "readwrite" });
-    if (permission !== "granted") {
-      saveFileHandle = null;
-      updateBackupUI();
-      return;
-    }
-    const writable = await saveFileHandle.createWritable();
-    await writable.write(JSON.stringify(exportPayload(), null, 2));
-    await writable.close();
-    updateBackupUI(true);
-  } catch (error) {
-    console.warn("保存ファイルへの書き込みに失敗しました", error);
-    elements.backupStatus.textContent = "ファイル同期に失敗";
-  }
 }
 
 function downloadBackup() {
@@ -2273,33 +2067,7 @@ async function restoreBackup(file) {
   }
 }
 
-async function loadDataJson(event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  try {
-    const response = await fetch(`data.json?v=${Date.now()}`, { cache: "no-cache" });
-    if (!response.ok) {
-      throw new Error(`data.json の取得に失敗しました (HTTP ${response.status})`);
-    }
-    const text = await response.text();
-    const payload = JSON.parse(text);
-    if (!isValidBackup(payload)) throw new Error("Curat のバックアップファイルではありません。");
-    data = migrateData(payload.data);
-    saveData();
-    render();
-    const count = payload.data?.series?.length || 0;
-    showToast(`data.json から ${count} 件のプレイリストを読み込みました`);
-    if (elements.settingsDialog?.open) {
-      elements.settingsDialog.close();
-    }
-  } catch (error) {
-    showToast(error.message || "data.json を読み込めませんでした", true);
-  }
-}
-
-function updateBackupUI(justSaved = false) {
+function updateBackupUI() {
   const statusPanel = $("#saveStatusPanel");
   statusPanel.dataset.syncState = cloudState.phase;
   elements.cloudSetupNotice.hidden = cloudState.configured;
@@ -2323,7 +2091,7 @@ function updateBackupUI(justSaved = false) {
   } else if (cloudState.phase === "connecting" || cloudState.phase === "loading") {
     elements.backupStatus.textContent = "クラウドへ接続中…";
     elements.saveStatusTitle.textContent = "Firebase へ接続中";
-    elements.saveStatusCopy.textContent = "端末内のデータは引き続き保存されています。";
+    elements.saveStatusCopy.textContent = "接続後に Firebase のデータを読み込みます。";
   } else if (cloudState.phase === "error") {
     elements.backupStatus.textContent = "クラウド同期エラー";
     elements.saveStatusTitle.textContent = "クラウド同期を確認してください";
@@ -2331,15 +2099,11 @@ function updateBackupUI(justSaved = false) {
   } else if (cloudState.phase === "signed-out") {
     elements.backupStatus.textContent = "ログインが必要";
     elements.saveStatusTitle.textContent = "クラウド同期は停止中";
-    elements.saveStatusCopy.textContent = "同じアカウントでログインすると端末間同期を開始します。";
-  } else if (saveFileHandle) {
-    elements.backupStatus.textContent = justSaved ? "ファイルへ同期済み" : "保存ファイル接続中";
-    elements.saveStatusTitle.textContent = "保存ファイルを接続中";
-    elements.saveStatusCopy.textContent = `「${saveFileHandle.name}」へ変更を自動同期します。`;
+    elements.saveStatusCopy.textContent = "ログインするまで変更は端末に保存されません。";
   } else {
-    elements.backupStatus.textContent = "このブラウザに保存中";
-    elements.saveStatusTitle.textContent = "ブラウザ保存は有効です";
-    elements.saveStatusCopy.textContent = "外部の保存ファイルはまだ接続されていません。";
+    elements.backupStatus.textContent = "Firebase 未設定";
+    elements.saveStatusTitle.textContent = "クラウド保存を利用できません";
+    elements.saveStatusCopy.textContent = "firebase-config.js を設定してください。";
   }
 }
 
@@ -2457,9 +2221,8 @@ $("#toggleKey").addEventListener("click", (event) => {
 $("#settingsForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   config.apiKey = elements.apiKey.value.trim();
-  saveConfig();
   elements.settingsDialog.close();
-  showToast("API 設定を保存しました");
+  showToast("API 設定をこのセッションに適用しました");
   if (pendingPlaylistUrl && config.apiKey) {
     const url = pendingPlaylistUrl;
     pendingPlaylistUrl = "";
@@ -2475,8 +2238,6 @@ $("#settingsForm").addEventListener("submit", async (event) => {
 $(".close-button", elements.settingsDialog).addEventListener("click", () =>
   elements.settingsDialog.close(),
 );
-$("#loadDataJson")?.addEventListener("click", loadDataJson);
-
 $("#openBackup").addEventListener("click", () => {
   updateBackupUI();
   elements.backupDialog.showModal();
@@ -2508,7 +2269,6 @@ elements.cloudLogout.addEventListener("click", async () => {
   await cloudSync.signOut();
   showToast("クラウド同期からログアウトしました");
 });
-$("#connectSave").addEventListener("click", connectSaveFile);
 $("#downloadSave").addEventListener("click", downloadBackup);
 $("#restoreSave").addEventListener("click", () => $("#restoreInput").click());
 $("#restoreInput").addEventListener("change", (event) => {
@@ -2840,7 +2600,6 @@ $("#projectForm").addEventListener("submit", (event) => {
   config.expandedProjects ||= {};
   config.expandedProjects[name] = true;
   selectedTreeKey = `playlist:${series.id}`;
-  saveConfig();
   saveData();
   elements.projectDialog.close();
   render();
@@ -2880,7 +2639,6 @@ elements.sidebarResizer.addEventListener("pointerdown", (event) => {
       getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width"),
     );
     config.sidebarWidth = Math.round(width);
-    saveConfig();
     document.removeEventListener("pointermove", handleMove);
     document.removeEventListener("pointerup", handleEnd);
   };
@@ -2901,7 +2659,6 @@ elements.sidebarResizer.addEventListener("keydown", (event) => {
   document.documentElement.style.setProperty("--sidebar-width", `${width}px`);
   config.sidebarWidth = Math.round(width);
   elements.sidebarResizer.setAttribute("aria-valuenow", String(Math.round(width)));
-  saveConfig();
 });
 
 function updateSidebarControls() {
@@ -2925,7 +2682,6 @@ function hideSidebar() {
   } else {
     document.body.classList.add("sidebar-collapsed");
     config.sidebarCollapsed = true;
-    saveConfig();
   }
   updateSidebarControls();
   elements.mobileMenu.focus();
@@ -2939,7 +2695,6 @@ elements.mobileMenu.addEventListener("click", () => {
   }
   document.body.classList.toggle("sidebar-collapsed");
   config.sidebarCollapsed = document.body.classList.contains("sidebar-collapsed");
-  saveConfig();
   updateSidebarControls();
 });
 elements.sidebarHide.addEventListener("click", hideSidebar);
@@ -2964,7 +2719,6 @@ document.addEventListener("keydown", (event) => {
     if (document.body.classList.contains("sidebar-collapsed")) {
       document.body.classList.remove("sidebar-collapsed");
       config.sidebarCollapsed = false;
-      saveConfig();
     }
     if (window.matchMedia("(max-width: 780px)").matches) {
       document.body.classList.add("sidebar-open");
@@ -2984,20 +2738,12 @@ document.addEventListener("keydown", (event) => {
 
 window.matchMedia("(max-width: 780px)").addEventListener("change", updateSidebarControls);
 
-window.addEventListener("storage", (event) => {
-  if (event.key === DATA_KEY && event.newValue) {
-    data = migrateData(JSON.parse(event.newValue));
-    render();
-  }
-});
-
-if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
 }
 
 render();
-Promise.all([restoreFileConnection(), restoreIDBData()]).then(() => cloudSync.start());
+cloudSync.start();
 updateSidebarControls();
 
 const initialSeriesId = location.hash.startsWith("#series=")

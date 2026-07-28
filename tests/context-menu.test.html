@@ -3,11 +3,10 @@
 <title>RUNNING</title>
 <pre id="result">running</pre>
 <iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script src="backup-test-helper.js"></script>
 <script>
-  const DATA_KEY = "playlog:data:v1";
-  const CONFIG_KEY = "playlog:config:v1";
   const now = "2026-07-27T00:00:00.000Z";
-  localStorage.setItem(DATA_KEY, JSON.stringify({
+  const testData = {
     version: 1,
     updatedAt: now,
     series: [{
@@ -27,13 +26,11 @@
       icon: "builtin:gamepad",
     }],
     playlistOrder: ["context-menu-series"],
-  }));
-  localStorage.setItem(CONFIG_KEY, JSON.stringify({
-    expandedProjects: { "テストフォルダー": true },
-  }));
+  };
 
   const frame = document.querySelector("iframe");
-  frame.addEventListener("load", () => {
+  frame.addEventListener("load", async () => {
+    await loadCuratTestData(frame, testData);
     setTimeout(() => {
       const appDocument = frame.contentDocument;
       const folderRow = appDocument.querySelector("[data-tree-folder='テストフォルダー']");
@@ -88,10 +85,8 @@
           ? "PASS context menus group explicit folder and playlist actions"
           : `FAIL folder=${folderMenuPassed} iconFocus=${iconFocusPassed} playlist=${playlistMenuPassed}`;
         document.title = passed ? "PASS" : "FAIL";
-        localStorage.removeItem(DATA_KEY);
-        localStorage.removeItem(CONFIG_KEY);
       }, 50);
-    }, 500);
+    }, 50);
   }, { once: true });
   frame.src = "../index.html";
 </script>

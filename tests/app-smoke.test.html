@@ -85,12 +85,25 @@
             appDocument.querySelector("#settingsForm .close-button")?.type === "button",
         ],
         [
-          "端末間同期のログイン UI と未設定案内がある",
+          "Firebase 同期のログイン UI と状態表示がある",
           Boolean(
             appDocument.querySelector("#cloudLoginForm #cloudEmail") &&
               appDocument.querySelector("#cloudLoginForm #cloudPassword") &&
               appDocument.querySelector("#cloudLogin")?.type === "submit" &&
-              !appDocument.querySelector("#cloudSetupNotice")?.hidden,
+              appDocument.querySelector("#saveStatusPanel"),
+          ),
+        ],
+        [
+          "設定と手動バックアップの操作だけが表示されている",
+          appDocument.querySelectorAll("#settingsForm .settings-section").length === 1 &&
+            appDocument.querySelectorAll(".backup-actions .backup-action-card").length === 2,
+        ],
+        [
+          "JSON のエクスポートとインポートが残っている",
+          Boolean(
+            appDocument.querySelector("#downloadSave") &&
+              appDocument.querySelector("#restoreSave") &&
+              appDocument.querySelector("#restoreInput"),
           ),
         ],
         [

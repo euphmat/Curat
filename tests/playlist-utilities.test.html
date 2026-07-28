@@ -3,10 +3,10 @@
 <title>RUNNING</title>
 <pre id="result">running</pre>
 <iframe style="width: 720px; height: 800px; border: 0"></iframe>
+<script src="backup-test-helper.js"></script>
 <script>
-  const DATA_KEY = "playlog:data:v1";
   const now = "2026-07-27T00:00:00.000Z";
-  localStorage.setItem(DATA_KEY, JSON.stringify({
+  const testData = {
     version: 1,
     updatedAt: now,
     playlistOrder: ["utility-series"],
@@ -27,60 +27,58 @@
         { id: "archived", videoId: "archived", title: "アーカイブ", status: "doing", archived: true },
       ],
     }],
-  }));
+  };
 
   const frame = document.querySelector("iframe");
   const finish = (passed, detail) => {
     document.querySelector("#result").textContent = passed ? "PASS playlist utilities" : `FAIL ${detail}`;
     document.title = passed ? "PASS" : "FAIL";
-    localStorage.removeItem(DATA_KEY);
   };
 
-  frame.addEventListener("load", () => {
-    setTimeout(() => {
-      const appDocument = frame.contentDocument;
-      appDocument.querySelector('[data-project-series="utility-series"]')?.click();
+  frame.addEventListener("load", async () => {
+    await loadCuratTestData(frame, testData);
+    const appDocument = frame.contentDocument;
+    appDocument.querySelector('[data-project-series="utility-series"]')?.click();
 
-      const actions = [...appDocument.querySelectorAll(".detail-actions .detail-action-button")];
-      const iconOnly =
-        actions.length === 7 &&
-        actions.every((action) => action.getAttribute("aria-label") && !action.textContent.trim());
-      const toolbarContained =
-        appDocument.querySelector(".detail-actions").scrollWidth <=
-        appDocument.querySelector(".detail-actions").clientWidth + 1;
+    const actions = [...appDocument.querySelectorAll(".detail-actions .detail-action-button")];
+    const iconOnly =
+      actions.length === 7 &&
+      actions.every((action) => action.getAttribute("aria-label") && !action.textContent.trim());
+    const toolbarContained =
+      appDocument.querySelector(".detail-actions").scrollWidth <=
+      appDocument.querySelector(".detail-actions").clientWidth + 1;
 
-      appDocument.querySelector('[data-detail-action="complete-all"]')?.click();
-      setTimeout(() => {
-        appDocument.querySelector("#confirmForm").requestSubmit(
-          appDocument.querySelector("#confirmAction"),
-        );
-        setTimeout(() => {
-          const completed = JSON.parse(localStorage.getItem(DATA_KEY)).series[0].tasks;
-          const completedCorrectly =
-            completed.find((task) => task.id === "todo").status === "done" &&
-            completed.find((task) => task.id === "doing").status === "done" &&
-            completed.find((task) => task.id === "skipped").status === "skipped" &&
-            completed.find((task) => task.id === "archived").status === "doing";
+    appDocument.querySelector('[data-detail-action="complete-all"]')?.click();
+    await waitForCuratTest(() => appDocument.querySelector("#confirmDialog").open);
+    appDocument.querySelector("#confirmForm").requestSubmit(
+      appDocument.querySelector("#confirmAction"),
+    );
+    await waitForCuratTest(
+      () => appDocument.querySelector('[data-task-id="todo"]')?.classList.contains("is-done"),
+    );
+    const completed = (await exportCuratTestData(frame)).series[0].tasks;
+    const completedCorrectly =
+      completed.find((task) => task.id === "todo").status === "done" &&
+      completed.find((task) => task.id === "doing").status === "done" &&
+      completed.find((task) => task.id === "skipped").status === "skipped" &&
+      completed.find((task) => task.id === "archived").status === "doing";
 
-          appDocument.querySelector('[data-detail-action="reset-progress"]')?.click();
-          setTimeout(() => {
-            appDocument.querySelector("#confirmForm").requestSubmit(
-              appDocument.querySelector("#confirmAction"),
-            );
-            setTimeout(() => {
-              const reset = JSON.parse(localStorage.getItem(DATA_KEY)).series[0].tasks;
-              const resetCorrectly =
-                reset.filter((task) => !task.archived).every((task) => task.status === "todo") &&
-                reset.find((task) => task.id === "archived").status === "doing";
-              finish(
-                iconOnly && toolbarContained && completedCorrectly && resetCorrectly,
-                `icons=${iconOnly} actions=${actions.length} contained=${toolbarContained} complete=${completedCorrectly} reset=${resetCorrectly}`,
-              );
-            }, 100);
-          }, 50);
-        }, 100);
-      }, 50);
-    }, 500);
+    appDocument.querySelector('[data-detail-action="reset-progress"]')?.click();
+    await waitForCuratTest(() => appDocument.querySelector("#confirmDialog").open);
+    appDocument.querySelector("#confirmForm").requestSubmit(
+      appDocument.querySelector("#confirmAction"),
+    );
+    await waitForCuratTest(
+      () => appDocument.querySelector('[data-task-id="todo"]')?.classList.contains("is-todo"),
+    );
+    const reset = (await exportCuratTestData(frame)).series[0].tasks;
+    const resetCorrectly =
+      reset.filter((task) => !task.archived).every((task) => task.status === "todo") &&
+      reset.find((task) => task.id === "archived").status === "doing";
+    finish(
+      iconOnly && toolbarContained && completedCorrectly && resetCorrectly,
+      `icons=${iconOnly} actions=${actions.length} contained=${toolbarContained} complete=${completedCorrectly} reset=${resetCorrectly}`,
+    );
   }, { once: true });
   frame.src = "../index.html";
 </script>

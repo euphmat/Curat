@@ -117,7 +117,7 @@
             <span class="backup-icon" aria-hidden="true"><svg class="icon"><use href="#icon-cloud"></use></svg></span>
             <span>
               <strong>保存データ</strong>
-              <small id="backupStatus">このブラウザに保存中</small>
+              <small id="backupStatus">Firebase へ接続中…</small>
             </span>
           </button>
 
@@ -221,7 +221,7 @@
         <div class="settings-section">
           <h3>YouTube API 設定</h3>
           <p class="sheet-lead">
-            静的サイトからプレイリストを取得するため、YouTube Data API v3 の API キーをこの端末に保存します。
+            静的サイトからプレイリストを取得するため、YouTube Data API v3 の API キーをこのセッションで使用します。
           </p>
           <label class="field">
             <span>API キー</span>
@@ -229,7 +229,7 @@
               <input id="apiKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
               <button id="toggleKey" type="button" aria-label="API キーを表示"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg><span>表示</span></button>
             </div>
-            <small>キーはバックアップには含まれず、このブラウザ内だけに保存されます。</small>
+            <small>キーは保存されず、ページを再読み込みすると再入力が必要です。エクスポートにも含まれません。</small>
           </label>
           <div class="info-box">
             <strong>安全に使うための設定</strong>
@@ -240,18 +240,6 @@
           </div>
         </div>
 
-        <div class="settings-section">
-          <h3>プリセットデータの読み込み</h3>
-          <p class="sheet-lead">
-            同梱のデータファイル (data.json) を読み込んで、プレイリストと視聴進捗を復元できます。
-          </p>
-          <div class="settings-data-actions">
-            <button class="secondary-button" id="loadDataJson" type="button">
-              <svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg>data.json を読み込む
-            </button>
-          </div>
-        </div>
-
         <div class="sheet-actions">
           <a
             class="secondary-button"
@@ -259,7 +247,7 @@
             target="_blank"
             rel="noreferrer"
           ><svg class="icon" aria-hidden="true"><use href="#icon-external-link"></use></svg>Cloud Console</a>
-          <button class="primary-button" id="saveSettings" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>設定を保存</button>
+          <button class="primary-button" id="saveSettings" value="default" type="submit" data-default-action><svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>設定を適用</button>
         </div>
       </form>
     </dialog>
@@ -273,13 +261,13 @@
           <button class="close-button" id="closeBackup" type="button" aria-label="閉じる"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
         </div>
         <p class="sheet-lead">
-          進捗はこの端末へ自動保存されます。Firebase にログインすると、iPad とパソコンの間でも自動同期されます。
+          進捗は Firebase のみに保存されます。ログインすると、iPad とパソコンの間でも自動同期されます。
         </p>
         <div class="save-status" id="saveStatusPanel">
           <span class="status-light"></span>
           <div>
-            <strong id="saveStatusTitle">ブラウザ保存は有効です</strong>
-            <p id="saveStatusCopy">外部の保存ファイルはまだ接続されていません。</p>
+            <strong id="saveStatusTitle">Firebase へ接続中</strong>
+            <p id="saveStatusCopy">接続後に Firebase のデータを読み込みます。</p>
           </div>
         </div>
         <div class="cloud-setup-notice" id="cloudSetupNotice">
@@ -305,11 +293,6 @@
         </div>
         <p class="backup-subtitle">手動バックアップ</p>
         <div class="backup-actions">
-          <button class="backup-action-card" id="connectSave" type="button">
-            <span class="action-icon"><svg class="icon" aria-hidden="true"><use href="#icon-cloud"></use></svg></span>
-            <span><strong>保存ファイルを接続</strong><small>対応ブラウザでは変更を自動同期</small></span>
-            <svg class="icon action-arrow" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>
-          </button>
           <button class="backup-action-card" id="downloadSave" type="button">
             <span class="action-icon"><svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg></span>
             <span><strong>バックアップを保存</strong><small>JSON ファイルとしてダウンロード</small></span>
@@ -325,9 +308,9 @@
         <div class="rule-box">
           <strong>保存ルール</strong>
           <ol>
-            <li>操作のたびにブラウザへ自動保存</li>
-            <li>ログイン中は Firebase と別端末へ自動同期</li>
-            <li>API キーだけは安全のためファイルに含めない</li>
+            <li>ログイン中の変更は Firebase へ自動保存</li>
+            <li>ログアウト中の変更はページを閉じると失われます</li>
+            <li>API キーは保存せず、エクスポートにも含めません</li>
           </ol>
         </div>
       </div>

@@ -3,9 +3,8 @@
 <title>RUNNING</title>
 <pre id="result">running</pre>
 <iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script src="backup-test-helper.js"></script>
 <script>
-  const DATA_KEY = "playlog:data:v1";
-  const CONFIG_KEY = "playlog:config:v1";
   const SOURCE_PROJECT = "誤分類";
   const TARGET_PROJECT = "正しい分類";
   const now = "2026-07-27T00:00:00.000Z";
@@ -20,7 +19,7 @@
     updatedAt: now,
   }));
 
-  localStorage.setItem(DATA_KEY, JSON.stringify({
+  const testData = {
     version: 1,
     updatedAt: now,
     series,
@@ -29,16 +28,11 @@
       { name: TARGET_PROJECT, aliases: [], learnedAliases: [] },
     ],
     playlistOrder: ["a", "b", "c"],
-  }));
-  localStorage.setItem(CONFIG_KEY, JSON.stringify({
-    expandedProjects: {
-      [SOURCE_PROJECT]: true,
-      [TARGET_PROJECT]: true,
-    },
-  }));
+  };
 
   const frame = document.querySelector("iframe");
-  frame.addEventListener("load", () => {
+  frame.addEventListener("load", async () => {
+    await loadCuratTestData(frame, testData);
     setTimeout(() => {
       const appDocument = frame.contentDocument;
       const source = appDocument.querySelector('[data-project-series="a"]');
@@ -61,8 +55,8 @@
         dataTransfer,
       }));
 
-      setTimeout(() => {
-        const afterFirstMove = JSON.parse(localStorage.getItem(DATA_KEY));
+      setTimeout(async () => {
+        const afterFirstMove = await exportCuratTestData(frame);
         const sourceKeptWhileOccupied =
           afterFirstMove.projects.some((project) => project.name === SOURCE_PROJECT) &&
           afterFirstMove.series.find((item) => item.id === "c")?.project === SOURCE_PROJECT;
@@ -75,27 +69,23 @@
           appDocument.querySelector("#saveProject"),
         );
 
-        setTimeout(() => {
-          const saved = JSON.parse(localStorage.getItem(DATA_KEY));
-          const savedConfig = JSON.parse(localStorage.getItem(CONFIG_KEY));
+        setTimeout(async () => {
+          const saved = await exportCuratTestData(frame);
           const sourceFolderExists = [...appDocument.querySelectorAll("[data-tree-folder]")]
             .some((item) => item.dataset.treeFolder === SOURCE_PROJECT);
           const passed =
             sourceKeptWhileOccupied &&
             saved.series.filter((item) => item.project === TARGET_PROJECT).length === 3 &&
             !saved.projects.some((project) => project.name === SOURCE_PROJECT) &&
-            !Object.hasOwn(savedConfig.expandedProjects || {}, SOURCE_PROJECT) &&
             !sourceFolderExists;
 
           document.querySelector("#result").textContent = passed
             ? "PASS moving the last playlist removes only the emptied source folder"
-            : `FAIL kept=${sourceKeptWhileOccupied} projects=${JSON.stringify(saved.projects)} config=${JSON.stringify(savedConfig.expandedProjects)} sourceRendered=${sourceFolderExists}`;
+            : `FAIL kept=${sourceKeptWhileOccupied} projects=${JSON.stringify(saved.projects)} sourceRendered=${sourceFolderExists}`;
           document.title = passed ? "PASS" : "FAIL";
-          localStorage.removeItem(DATA_KEY);
-          localStorage.removeItem(CONFIG_KEY);
         }, 100);
       }, 600);
-    }, 500);
+    }, 50);
   }, { once: true });
   frame.src = "../index.html";
 </script>

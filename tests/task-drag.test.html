@@ -3,8 +3,8 @@
 <title>RUNNING</title>
 <pre id="result">running</pre>
 <iframe style="width: 1200px; height: 900px; border: 0"></iframe>
+<script src="backup-test-helper.js"></script>
 <script>
-  const DATA_KEY = "playlog:data:v1";
   const now = "2026-07-27T00:00:00.000Z";
   const tasks = ["a", "b", "c"].map((id, index) => ({
     id,
@@ -19,7 +19,7 @@
     createdAt: now,
     updatedAt: now,
   }));
-  localStorage.setItem(DATA_KEY, JSON.stringify({
+  const testData = {
     version: 1,
     updatedAt: now,
     series: [{
@@ -36,10 +36,12 @@
     }],
     projects: [{ name: "テスト", aliases: [], learnedAliases: [] }],
     playlistOrder: ["playlist"],
-  }));
+  };
 
   const frame = document.querySelector("iframe");
-  frame.addEventListener("load", () => {
+  frame.addEventListener("load", async () => {
+    await loadCuratTestData(frame, testData);
+    frame.contentDocument.querySelector('[data-project-series="playlist"]').click();
     setTimeout(() => {
       const appDocument = frame.contentDocument;
       const source = appDocument.querySelector('[data-drag-task="c"]');
@@ -64,11 +66,11 @@
         dataTransfer,
       }));
 
-      setTimeout(() => {
+      setTimeout(async () => {
         const renderedOrder = [
           ...appDocument.querySelectorAll(".task-row"),
         ].map((row) => row.dataset.taskId);
-        const saved = JSON.parse(localStorage.getItem(DATA_KEY));
+        const saved = await exportCuratTestData(frame);
         const savedSeries = saved.series.find((series) => series.id === "playlist");
         const passed =
           JSON.stringify(renderedOrder) === JSON.stringify(["c", "a", "b"]) &&
@@ -79,9 +81,8 @@
           ? "PASS task drag order is rendered and persisted"
           : `FAIL rendered=${JSON.stringify(renderedOrder)} taskOrder=${JSON.stringify(savedSeries.taskOrder)}`;
         document.title = passed ? "PASS" : "FAIL";
-        localStorage.removeItem(DATA_KEY);
       }, 100);
-    }, 500);
+    }, 50);
   }, { once: true });
   frame.src = "../index.html#series=playlist";
 </script>

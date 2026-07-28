@@ -23,16 +23,16 @@
       },
     });
 
-    await sync.start();
     sync.queue({ series: [{ id: "local-only" }] });
 
     const passed =
-      sync.configured === false &&
-      status?.phase === "not-configured" &&
+      sync.configured === true &&
+      sync.state.phase === "loading" &&
+      status === null &&
       remoteApplied === false;
     document.querySelector("#result").textContent = passed
-      ? "PASS Firebase 未設定時は端末内保存だけで安全に動作"
-      : `FAIL configured=${sync.configured} phase=${status?.phase} remote=${remoteApplied}`;
+      ? "PASS Firebase 設定を認識し、認証前は同期しない"
+      : `FAIL configured=${sync.configured} phase=${sync.state.phase} remote=${remoteApplied}`;
     document.title = passed ? "PASS" : "FAIL";
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL ${error.message}`;

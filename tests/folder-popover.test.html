@@ -3,11 +3,10 @@
 <title>RUNNING</title>
 <pre id="result">running</pre>
 <iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script src="backup-test-helper.js"></script>
 <script>
-  const DATA_KEY = "playlog:data:v1";
-  const CONFIG_KEY = "playlog:config:v1";
   const now = "2026-07-27T00:00:00.000Z";
-  localStorage.setItem(DATA_KEY, JSON.stringify({
+  const testData = {
     version: 1,
     updatedAt: now,
     series: [{
@@ -27,13 +26,11 @@
       icon: "builtin:gamepad",
     }],
     playlistOrder: ["folder-popover-series"],
-  }));
-  localStorage.setItem(CONFIG_KEY, JSON.stringify({
-    expandedProjects: { "テストフォルダー": true },
-  }));
+  };
 
   const frame = document.querySelector("iframe");
-  frame.addEventListener("load", () => {
+  frame.addEventListener("load", async () => {
+    await loadCuratTestData(frame, testData);
     setTimeout(() => {
       const appDocument = frame.contentDocument;
       const folderRow = [...appDocument.querySelectorAll("[data-tree-folder]")]
@@ -61,8 +58,8 @@
         appDocument.querySelector("[data-folder-icon='builtin:sword']").click();
         form.requestSubmit(appDocument.querySelector("#saveFolder"));
 
-        setTimeout(() => {
-          const saved = JSON.parse(localStorage.getItem(DATA_KEY));
+        setTimeout(async () => {
+          const saved = await exportCuratTestData(frame);
           const project = saved.projects.find((item) => item.name === "新しいフォルダー名");
           const renamedRow = [...appDocument.querySelectorAll("[data-tree-folder]")]
             .find((item) => item.dataset.treeFolder === "新しいフォルダー名");
@@ -80,11 +77,9 @@
             ? "PASS folder edits use a contextual non-modal popover and persist changes"
             : `FAIL opened=${openedContextually} saved=${savedFromPopover} project=${JSON.stringify(project)}`;
           document.title = passed ? "PASS" : "FAIL";
-          localStorage.removeItem(DATA_KEY);
-          localStorage.removeItem(CONFIG_KEY);
         }, 100);
       }, 50);
-    }, 500);
+    }, 50);
   }, { once: true });
   frame.src = "../index.html";
 </script>

@@ -3,8 +3,8 @@
 <title>RUNNING</title>
 <pre id="result">running</pre>
 <iframe style="width: 1200px; height: 800px; border: 0"></iframe>
+<script src="backup-test-helper.js"></script>
 <script>
-  const DATA_KEY = "playlog:data:v1";
   const now = "2026-07-27T00:00:00.000Z";
   const series = ["a", "b", "c", "d"].map((id) => ({
     id,
@@ -16,7 +16,7 @@
     createdAt: now,
     updatedAt: now,
   }));
-  localStorage.setItem(DATA_KEY, JSON.stringify({
+  const testData = {
     version: 1,
     updatedAt: now,
     series,
@@ -25,10 +25,11 @@
       { name: "別フォルダー", aliases: [], learnedAliases: [] },
     ],
     playlistOrder: ["a", "b", "c", "d"],
-  }));
+  };
 
   const frame = document.querySelector("iframe");
-  frame.addEventListener("load", () => {
+  frame.addEventListener("load", async () => {
+    await loadCuratTestData(frame, testData);
     setTimeout(() => {
       const appDocument = frame.contentDocument;
       const source = appDocument.querySelector('[data-project-series="c"]');
@@ -79,13 +80,13 @@
           dataTransfer: nextTransfer,
         }));
 
-        setTimeout(() => {
+        setTimeout(async () => {
           const movedFolderOrder = [
             ...appDocument.querySelectorAll(
               '[data-drop-project="別フォルダー"] [data-project-series]',
             ),
           ].map((item) => item.dataset.projectSeries);
-          const saved = JSON.parse(localStorage.getItem(DATA_KEY));
+          const saved = await exportCuratTestData(frame);
           const movedSeries = saved.series.find((item) => item.id === "a");
           const passed =
             JSON.stringify(firstRenderedOrder) === JSON.stringify(["a", "c", "b"]) &&
@@ -96,10 +97,9 @@
             ? "PASS drag reorder and cross-folder positioning are persisted"
             : `FAIL first=${JSON.stringify(firstRenderedOrder)} moved=${JSON.stringify(movedFolderOrder)} saved=${JSON.stringify(saved.playlistOrder)} project=${movedSeries.project}`;
           document.title = passed ? "PASS" : "FAIL";
-          localStorage.removeItem(DATA_KEY);
         }, 100);
       }, 100);
-    }, 500);
+    }, 50);
   }, { once: true });
   frame.src = "../index.html";
 </script>
